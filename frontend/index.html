@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacific BioArchive — Home</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <span class="brand">Pacific BioArchive</span>
+    <a href="upload.html">Upload</a>
+    <!-- 以下为 B/C 的页面入口（未开发时禁用，B/C 完成后去掉 disabled） -->
+    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="query.html" class="disabled" title="Member C: in development">Search</a>
+    <a href="tags.html" class="disabled" title="Member C: in development">Tags</a>
+    <a href="notify.html" class="disabled" title="Member C: in development">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout" style="display:none">Sign out</button>
+    <a href="signup.html" id="linkSignin" style="display:none">Sign in / Sign up</a>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <h1>Pacific BioArchive</h1>
+      <p class="subtitle">Multi-cloud serverless platform for cross-habitat wildlife observation.
+        Upload media files; species are detected automatically, thumbnails are generated, and files
+        become searchable by species tags.</p>
+      <div id="guestBox">
+        <p style="font-size:14px;color:#444;">Please sign up or sign in to upload and query files.</p>
+        <a class="btn" href="signup.html">Sign up / Sign in</a>
+      </div>
+      <div id="userBox" class="hidden">
+        <p style="font-size:14px;color:#444;">You are signed in. Upload media files to get started.</p>
+        <a class="btn" href="upload.html">Go to Upload</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      const user = Auth.getCurrentUser();
+      if (Auth.isAuthenticated() && user) {
+        document.getElementById('userInfo').textContent =
+          user.firstName + ' ' + user.lastName + ' (' + user.email + ')';
+        document.getElementById('btnLogout').style.display = '';
+        document.getElementById('userBox').classList.remove('hidden');
+      } else {
+        document.getElementById('linkSignin').style.display = '';
+        document.getElementById('guestBox').classList.remove('hidden');
+      }
+      document.getElementById('btnLogout').addEventListener('click', function () {
+        Auth.logout();
+        window.location.href = './index.html';
+      });
+    })();
+  </script>
+</body>
+</html>

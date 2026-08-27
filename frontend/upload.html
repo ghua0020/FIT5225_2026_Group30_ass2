@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <span class="brand">Pacific BioArchive</span>
+    <a href="index.html">Home</a>
+    <a href="upload.html">Upload</a>
+    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="query.html" class="disabled" title="Member C: in development">Search</a>
+    <a href="tags.html" class="disabled" title="Member C: in development">Tags</a>
+    <a href="notify.html" class="disabled" title="Member C: in development">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout">Sign out</button>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <h1>Upload media</h1>
+      <p class="subtitle">Images and videos are stored in S3, then automatically processed:
+        duplicates are rejected by checksum, thumbnails are generated, and species tags are detected
+        by the ML pipeline (Member B).</p>
+
+      <label for="fileInput">Choose image or video file</label>
+      <input type="file" id="fileInput" accept="image/*,video/*">
+
+      <button type="button" id="btnUpload">Upload</button>
+      <div id="msg"></div>
+      <div class="file-list" id="fileList"></div>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/upload.js"></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="subtitle">Access your wildlife media library.</p>
+      <form id="loginForm">
+        <label for="username">Email</label>
+        <input type="email" id="username" required autocomplete="username">
+        <label for="password">Password</label>
+        <input type="password" id="password" required autocomplete="current-password">
+        <button type="submit">Sign in</button>
+      </form>
+      <div id="msg"></div>
+      <p class="link-line">No account? <a href="signup.html">Sign up</a></p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      Auth.redirectIfAuthenticated();
+      const $ = id => document.getElementById(id);
+      const msg = $('msg');
+
+      function show(text, cls) {
+        msg.className = 'msg ' + (cls || 'info');
+        msg.textContent = text;
+      }
+
+      $('loginForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const btn = e.target.querySelector('button');
+        btn.disabled = true;
+        try {
+          await Auth.login($('username').value.trim(), $('password').value);
+          show('Signed in. Redirecting...', 'success');
+          setTimeout(() => window.location.href = './index.html', 800);
+        } catch (err) {
+          // UserNotConfirmedException: 需要先邮箱验证
+          if (err.code === 'UserNotConfirmedException') {
+            localStorage.setItem('pba_pending_email', $('username').value.trim());
+            show('Please verify your email first. <a href="signup.html">Go verify</a>', 'error');
+          } else {
+            show(err.message, 'error');
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
