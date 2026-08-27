@@ -58,7 +58,7 @@
     show('Uploading ' + file.name + ' ...', 'info');
     const putResp = await fetch(data.uploadUrl, {
       method: 'PUT',
-      headers: { 'Content-Type': contentType },
+      headers: data.uploadHeaders || { 'Content-Type': contentType },
       body: file
     });
     if (!putResp.ok) {

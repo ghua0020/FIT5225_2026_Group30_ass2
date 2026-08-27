@@ -1,0 +1,10 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+boto3==1.43.81
+megadetector==10.0.24
+numpy==2.3.5
+opencv-python-headless==5.0.0.93
+Pillow>=11.0,<13
+PyYAML==6.0.3
+torch==2.13.0+cpu
+torchvision==0.28.0+cpu

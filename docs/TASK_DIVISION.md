@@ -89,7 +89,7 @@ AWS: Cognito(A) · S3(A) · Lambda(B) · API Gateway(A/C) · DynamoDB(C) · SNS(
 | 契约 | 归属 | 内容 |
 |---|---|---|
 | 1. Bucket 命名/目录 | A 定义 | `uploads/`、`thumbnails/`、`models/v1/` 路径规则 |
-| 2. DynamoDB schema + GSI | B/C 共同定死 | 记录字段：`file_id, checksum, file_type, tags[{name,count}], full_url, thumb_url, uploaded_by, created_at` + 查询用索引设计 |
+| 2. DynamoDB schema + GSI | B/C 共同定死 | 以 [`DB_SCHEMA_V2.md`](DB_SCHEMA_V2.md) 为当前契约：`files` + `file_tags` + `subscriptions`、3 个 GSI、稳定 URL 和 SNS 消息格式 |
 | 3. API 格式 | A/C 各自定义自己的端点 | RESTful JSON，统一 `Authorization: Bearer <cognito_token>` |
 | 4. SNS 消息格式 | B 定义、C 消费 | `{file_id, tags[], full_url}` |
 | 5. 共享认证工具 | A 输出 | `auth.js`（前端）+ token 校验 Lambda 层（后端），B/C 直接引用 |

@@ -203,6 +203,13 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Pacific BioArchive local models and processing outputs
+*.pt
+mg_detections.json
+cropped_images/
+processing-output/
+__MACOSX/
+
 # Ruff stuff:
 .ruff_cache/
 

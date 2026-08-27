@@ -14,6 +14,7 @@ IAM 要求：s3:PutObject + s3:GetObject（uploads/*）+ s3:ListBucket（桶级�
 import json
 import logging
 import os
+import re
 import uuid
 from urllib.parse import unquote
 
@@ -83,14 +84,27 @@ def _check_duplicate_s3(checksum):
         return False
 
 
+def _cognito_sub(event):
+    """Support REST API Cognito authorizers and HTTP API JWT authorizers."""
+    authorizer = (event.get("requestContext") or {}).get("authorizer") or {}
+    claims = authorizer.get("claims") or (authorizer.get("jwt") or {}).get("claims") or {}
+    return str(claims.get("sub") or "")
+
+
 def lambda_handler(event, context):
     params = event.get("queryStringParameters") or {}
     filename = unquote(params.get("filename", "file"))
     content_type = params.get("content_type") or "application/octet-stream"
     checksum = (params.get("checksum") or "").strip()
+    uploaded_by = _cognito_sub(event)
 
     if not BUCKET:
         return _json(500, {"error": "BUCKET_NAME not configured in Lambda env vars"})
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", checksum):
+        return _json(400, {"error": "checksum must be a complete SHA-256 value"})
+    if not uploaded_by:
+        return _json(401, {"error": "authenticated Cognito sub is required"})
+    checksum = checksum.lower()
 
     # 1. 去重检查：数据库（可选）或 S3 前缀查找，任一命中即判定重复
     if checksum and (_check_duplicate_db(checksum) or _check_duplicate_s3(checksum)):
@@ -107,7 +121,12 @@ def lambda_handler(event, context):
     # 3. 生成 presigned URL（5 分钟有效）
     upload_url = s3.generate_presigned_url(
         "put_object",
-        Params={"Bucket": BUCKET, "Key": file_key, "ContentType": content_type},
+        Params={
+            "Bucket": BUCKET,
+            "Key": file_key,
+            "ContentType": content_type,
+            "Metadata": {"checksum": checksum, "uploaded-by": uploaded_by},
+        },
         ExpiresIn=300,
     )
 
@@ -119,6 +138,11 @@ def lambda_handler(event, context):
             "fileKey": file_key,
             "fileName": safe_name,
             "contentType": content_type,
+            "uploadHeaders": {
+                "Content-Type": content_type,
+                "x-amz-meta-checksum": checksum,
+                "x-amz-meta-uploaded-by": uploaded_by,
+            },
             "duplicate": False,
         },
     )

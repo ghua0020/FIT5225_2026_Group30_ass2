@@ -15,9 +15,20 @@ Users upload wildlife images/videos; the system automatically detects species wi
 |---|---|---|
 | **Auth** (sign up / sign in / sign out, email verification, route guard) | A | ✅ Done |
 | **Upload** (SHA-256 checksum, dedup, presigned URL direct-to-S3) | A | ✅ Done |
-| **Gallery / processing pipeline** (thumbnails, video frame extraction, ML tagging) | B | 🚧 In development |
+| **Processing pipeline** (thumbnails, 1 frame/sec video extraction, ML tagging, DB transaction) | B | ✅ Basic version implemented and locally verified; AWS deployment pending |
+| **Gallery** (thumbnail grid, tags, processing results) | B | 🚧 In development |
 | **Query APIs** (tag/species/URL/file queries, tag management, delete) | C | 🚧 In development |
 | **Notifications** (SNS tag subscriptions) | C | 🚧 In development |
+
+### Current milestone
+
+The next implementation target is the **Processing Pipeline**: S3-triggered image/video processing, thumbnail generation, one-frame-per-second video sampling, versioned ML inference, DynamoDB metadata updates, and tag-event publication.
+
+Known security, reliability, integration, UI, and documentation issues have been recorded in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md). They are intentionally deferred unless they block the Processing Pipeline or must be resolved before deployment/demo.
+
+The current DynamoDB/S3/SNS contract shared by the Processing and Query modules is [`docs/DB_SCHEMA_V2.md`](docs/DB_SCHEMA_V2.md). It supersedes the earlier v1 draft for new implementation work.
+
+Processing implementation, local verification, AWS resources, environment variables, IAM, and deployment steps are documented in [`docs/PROCESSING_PIPELINE.md`](docs/PROCESSING_PIPELINE.md).
 
 ## Implemented Features (Member A — Auth & Upload)
 
@@ -66,10 +77,13 @@ frontend/
     ├── config.js     # ⚠️ ALL placeholders (YOUR_*) live here
     ├── auth.js       # shared auth utility (Cognito direct + session + apiGet)
     └── upload.js     # checksum → presigned → PUT to S3
-backend/lambdas/get-upload-url/
+backend/lambdas/get_upload_url/
 └── lambda_function.py  # presigned URL + dedup Lambda
 docs/
 ├── TASK_DIVISION.md    # team task breakdown (3 members)
+├── KNOWN_ISSUES.md     # deferred issues, priorities, fixes, and pipeline milestone
+├── DB_SCHEMA_V2.md     # current files/file_tags/subscriptions and SNS contract
+├── PROCESSING_PIPELINE.md # basic implementation, verification, and AWS setup
 └── AWS_SETUP_GUIDE.md  # step-by-step AWS console setup guide
 ```
 
@@ -112,5 +126,3 @@ Open `http://localhost:8000` (must be localhost — `crypto.subtle` requires a s
 
 Task breakdown & contracts: [docs/TASK_DIVISION.md](docs/TASK_DIVISION.md) (Chinese)
 AWS console setup: [docs/AWS_SETUP_GUIDE.md](docs/AWS_SETUP_GUIDE.md) (Chinese)
-
-> ⚠️ Team report must include a Generative AI usage statement (§9 of the assignment), otherwise sections 6.2/6.3 score 0.
