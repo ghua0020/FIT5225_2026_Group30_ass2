@@ -20,6 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import boto3
 from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.types import TypeSerializer
 
 FILES_TABLE = os.environ.get("FILES_TABLE", "files")
 FILE_TAGS_TABLE = os.environ.get("FILE_TAGS_TABLE", "file_tags")
@@ -28,9 +29,18 @@ FULL_INDEX = os.environ.get("FULL_INDEX", "full-index")
 TOPIC_ARN = os.environ.get("NOTIFY_TOPIC_ARN", "")
 
 _dynamodb = boto3.resource("dynamodb")
+_dynamodb_client = boto3.client("dynamodb")
 _files = _dynamodb.Table(FILES_TABLE)
 _file_tags = _dynamodb.Table(FILE_TAGS_TABLE)
 _sns = boto3.client("sns")
+
+_serializer = TypeSerializer()
+
+
+def _to_dyn(item):
+    """普通 Python dict → DynamoDB AttributeValue 格式（client.transact_write_items 要求）。
+    resource 的 put_item 会自动转换，但 client 需要显式 {"S": ...} / {"N": ...} 包装。"""
+    return {k: _serializer.serialize(v) for k, v in item.items()}
 
 CORS = {
     "Content-Type": "application/json",
@@ -123,15 +133,17 @@ def _apply_operation(item, tag_names, operation):
                 {
                     "Put": {
                         "TableName": FILE_TAGS_TABLE,
-                        "Item": {
-                            "tag": tag,
-                            "file_id": file_id,
-                            "count": 1,
-                            "file_type": item.get("file_type", "image"),
-                            "full_url": item.get("full_url", ""),
-                            "thumb_url": item.get("thumb_url", ""),
-                            "created_at": now,
-                        },
+                        "Item": _to_dyn(
+                            {
+                                "tag": tag,
+                                "file_id": file_id,
+                                "count": 1,
+                                "file_type": item.get("file_type", "image"),
+                                "full_url": item.get("full_url", ""),
+                                "thumb_url": item.get("thumb_url", ""),
+                                "created_at": now,
+                            }
+                        ),
                     }
                 }
             )
@@ -146,7 +158,7 @@ def _apply_operation(item, tag_names, operation):
                 {
                     "Delete": {
                         "TableName": FILE_TAGS_TABLE,
-                        "Key": {"tag": tag, "file_id": file_id},
+                        "Key": _to_dyn({"tag": tag, "file_id": file_id}),
                     }
                 }
             )
@@ -155,8 +167,8 @@ def _apply_operation(item, tag_names, operation):
     if changed:
         item["tags"] = sorted(tags)
         item["tag_counts"] = tag_counts
-        transact.append({"Put": {"TableName": FILES_TABLE, "Item": item}})
-        _dynamodb.transact_write_items(TransactItems=transact)
+        transact.append({"Put": {"TableName": FILES_TABLE, "Item": _to_dyn(item)}})
+        _dynamodb_client.transact_write_items(TransactItems=transact)
 
     return sorted(tags), changed
 
