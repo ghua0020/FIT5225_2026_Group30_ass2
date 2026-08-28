@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .card section { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e2e6ea; }
+    .card section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row input[type="text"], .row input[type="url"] { flex: 1; margin: 0; }
+    .row button { margin: 0; }
+    textarea { width: 100%; padding: 9px 10px; border: 1px solid #c9d0d8; border-radius: 6px; font-size: 13px; font-family: Consolas, monospace; }
+    .results { margin-top: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .grid a { display: block; }
+    .grid img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; border: 1px solid #dfe3e8; }
+    .grid .label { font-size: 12px; color: #6b7684; text-align: center; word-break: break-all; }
+    .videos a { display: block; color: #2d6fc3; word-break: break-all; margin-bottom: 4px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <span class="brand">Pacific BioArchive</span>
+    <a href="index.html">Home</a>
+    <a href="upload.html">Upload</a>
+    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="query.html">Search</a>
+    <a href="tags.html">Tags</a>
+    <a href="notify.html">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout">Sign out</button>
+  </nav>
+
+  <div class="container" style="max-width: 860px;">
+    <div class="card">
+      <h1>Search media</h1>
+      <p class="subtitle">Query tagged wildlife media. Results show image thumbnails (click to open the full image) and full video links.</p>
+
+      <!-- 查询①：按标签 + 最低计数（AND） -->
+      <section>
+        <h3>1. By tags with minimum counts</h3>
+        <label for="qTags">JSON tag counts (all must be satisfied, logical AND)</label>
+        <textarea id="qTags" rows="2">{"koala": 2, "wombat": 1}</textarea>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" id="btnByTags">Search by tags</button>
+        </div>
+      </section>
+
+      <!-- 查询②：按物种 -->
+      <section>
+        <h3>2. By species</h3>
+        <label for="qSpecies">Species name (files containing at least one of it)</label>
+        <div class="row">
+          <input type="text" id="qSpecies" list="speciesList" placeholder="e.g. koala">
+          <button type="button" id="btnBySpecies">Search by species</button>
+        </div>
+      </section>
+
+      <!-- 查询③：缩略图 URL 反查原图 -->
+      <section>
+        <h3>3. Thumbnail URL &rarr; full image</h3>
+        <label for="qThumb">Paste a thumbnail URL</label>
+        <div class="row">
+          <input type="url" id="qThumb" placeholder="https://.../thumbnails/...">
+          <button type="button" id="btnThumb">Resolve</button>
+        </div>
+      </section>
+
+      <!-- 查询④：按文件查询 -->
+      <section>
+        <h3>4. Upload a file to find similar</h3>
+        <label for="qFile">Send an image; the system detects its species and finds matching files (the file itself is not stored)</label>
+        <input type="file" id="qFile" accept="image/*">
+        <div class="row" style="margin-top:10px;">
+          <button type="button" id="btnByFile">Search by file</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>Add / remove tags or delete files</h3>
+        <p style="font-size:13px;color:#6b7684;">
+          Bulk tag operations and file deletion are on the <a href="tags.html" style="color:#2d6fc3;">Tags</a> page.
+        </p>
+      </section>
+
+      <div class="results" id="results"></div>
+    </div>
+  </div>
+
+  <datalist id="speciesList">
+    <option value="koala"></option><option value="wombat"></option>
+    <option value="magpie"></option><option value="dingo"></option>
+  </datalist>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/query.js"></script>
+</body>
+</html>

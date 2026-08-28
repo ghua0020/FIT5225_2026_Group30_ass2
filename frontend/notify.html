@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #eaf2fb; color: #1d5fa8; border: 1px solid #c3d9f0;
+      border-radius: 999px; padding: 6px 12px; font-size: 13px;
+    }
+    .chip button {
+      margin: 0; padding: 0 6px; background: none; color: #b02a2a; border: none;
+      cursor: pointer; font-size: 13px; line-height: 1;
+    }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    .row input[type="text"] { flex: 1; margin: 0; }
+    .row button { margin: 0; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <span class="brand">Pacific BioArchive</span>
+    <a href="index.html">Home</a>
+    <a href="upload.html">Upload</a>
+    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="query.html">Search</a>
+    <a href="tags.html">Tags</a>
+    <a href="notify.html">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout">Sign out</button>
+  </nav>
+
+  <div class="container">
+    <div class="card">
+      <h1>Tag notifications</h1>
+      <p class="subtitle">Get an email when a new file matching a subscribed species is added or updated.</p>
+
+      <section>
+        <h3>Subscribe to species</h3>
+        <label for="subTags">Species to notify (comma separated)</label>
+        <div class="row">
+          <input type="text" id="subTags" list="speciesList" placeholder="koala, wombat">
+          <button type="button" id="btnSubscribe">Subscribe</button>
+        </div>
+      </section>
+
+      <section style="margin-top:24px; padding-top:18px; border-top:1px solid #e2e6ea;">
+        <h3>Current subscriptions</h3>
+        <div class="chips" id="chips"></div>
+        <p class="subtitle" id="emptyNote"></p>
+      </section>
+
+      <div id="msg"></div>
+    </div>
+  </div>
+
+  <datalist id="speciesList">
+    <option value="koala"></option><option value="wombat"></option>
+    <option value="magpie"></option><option value="dingo"></option>
+  </datalist>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/notify.js"></script>
+</body>
+</html>
