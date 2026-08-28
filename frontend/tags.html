@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tags — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    textarea { width: 100%; padding: 9px 10px; border: 1px solid #c9d0d8; border-radius: 6px; font-size: 13px; font-family: Consolas, monospace; }
+    .ops { margin-top: 12px; }
+    .ops label { display: inline-flex; align-items: center; gap: 6px; margin: 0 16px 0 0; font-size: 14px; }
+    .result { margin-top: 16px; font-size: 13px; }
+    .result pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <span class="brand">Pacific BioArchive</span>
+    <a href="index.html">Home</a>
+    <a href="upload.html">Upload</a>
+    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="query.html">Search</a>
+    <a href="tags.html">Tags</a>
+    <a href="notify.html">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout">Sign out</button>
+  </nav>
+
+  <div class="container" style="max-width: 860px;">
+    <div class="card">
+      <h1>Tag management</h1>
+      <p class="subtitle">Bulk add/remove tags on files and delete files. Paste one URL per line (image or video URLs, original or thumbnail).</p>
+
+      <section>
+        <h3>Bulk add / remove tags</h3>
+        <label for="mgmtUrls">File URLs (one per line)</label>
+        <textarea id="mgmtUrls" rows="4" placeholder="https://.../thumbnails/...&#10;https://.../uploads/..."></textarea>
+        <label for="mgmtTags">Tags to add or remove (comma separated)</label>
+        <input type="text" id="mgmtTags" list="speciesList" placeholder="koala, wombat">
+        <div class="ops">
+          <label><input type="radio" name="op" value="1" checked> Add tags</label>
+          <label><input type="radio" name="op" value="0"> Remove tags</label>
+          <button type="button" id="btnBulk">Apply</button>
+        </div>
+      </section>
+
+      <section style="margin-top:26px; padding-top:20px; border-top:1px solid #e2e6ea;">
+        <h3>Delete files</h3>
+        <label for="delUrls">File URLs to delete (one per line)</label>
+        <textarea id="delUrls" rows="4" placeholder="https://.../thumbnails/..."></textarea>
+        <button type="button" id="btnDelete">Delete files</button>
+      </section>
+
+      <div class="result" id="result"></div>
+    </div>
+  </div>
+
+  <datalist id="speciesList">
+    <option value="koala"></option><option value="wombat"></option>
+    <option value="magpie"></option><option value="dingo"></option>
+  </datalist>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/tags.js"></script>
+</body>
+</html>

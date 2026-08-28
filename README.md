@@ -17,8 +17,8 @@ Users upload wildlife images/videos; the system automatically detects species wi
 | **Upload** (SHA-256 checksum, dedup, presigned URL direct-to-S3) | A | ✅ Done |
 | **Processing pipeline** (thumbnails, 1 frame/sec video extraction, ML tagging, DB transaction) | B | ✅ Basic version implemented and locally verified; AWS deployment pending |
 | **Gallery** (thumbnail grid, tags, processing results) | B | 🚧 In development |
-| **Query APIs** (tag/species/URL/file queries, tag management, delete) | C | 🚧 In development |
-| **Notifications** (SNS tag subscriptions) | C | 🚧 In development |
+| **Query APIs** (tag/species/URL/file queries, tag management, delete) | C | ✅ Code done (deployment: `docs/C_QUERY_SETUP_GUIDE.md`) |
+| **Notifications** (SNS tag subscriptions) | C | ✅ Code done (deployment: `docs/C_QUERY_SETUP_GUIDE.md`) |
 
 ### Current milestone
 
@@ -50,6 +50,12 @@ Processing implementation, local verification, AWS resources, environment variab
 ### Shared utilities for the team
 - `frontend/js/auth.js` — `Auth.apiGet()` / `Auth.authHeaders()` / `Auth.requireAuth()` for Members B & C
 
+## Implemented Features (Member C — Query & Notification)
+
+- §4.3 six query APIs: tags with minimum counts (AND) · by species · thumbnail → full image · search-by-file (temporary detection, not stored) · bulk add/remove tags (`operation` 1/0) · delete files (storage + database)
+- §4.4 SNS notifications: subscribe / unsubscribe per species; email delivered by SNS FilterPolicy on message attribute `tags` (no SES)
+- Pages: `query.html`, `tags.html`, `notify.html`; shared `js/api.js` client (Bearer token via A's `auth.js`)
+
 ---
 
 ## Architecture
@@ -68,17 +74,35 @@ Browser (frontend/)
 
 ```
 frontend/
-├── index.html        # entry page with nav (B/C links placeholder)
+├── index.html        # entry page with nav
 ├── signup.html       # sign up + email verification
 ├── login.html        # sign in
 ├── upload.html       # upload page
+├── query.html        # C: search (tags+count / species / thumbnail / by-file)
+├── tags.html         # C: bulk add-remove tags, delete files
+├── notify.html       # C: SNS tag subscriptions
 ├── css/style.css     # shared minimal stylesheet
 └── js/
-    ├── config.js     # ⚠️ ALL placeholders (YOUR_*) live here
+    ├── config.js     # ⚠️ 本地真实配置（.gitignore 已忽略，不入库）
+    ├── config.example.js   # C: 可提交的占位符配置
     ├── auth.js       # shared auth utility (Cognito direct + session + apiGet)
-    └── upload.js     # checksum → presigned → PUT to S3
-backend/lambdas/get_upload_url/
-└── lambda_function.py  # presigned URL + dedup Lambda
+    ├── api.js        # C: GET/POST 客户端（复用 auth.js，queryApiBaseUrl）
+    ├── upload.js     # checksum → presigned → PUT to S3
+    ├── query.js      # C: 查询页逻辑
+    ├── tags.js       # C: 标签管理页逻辑
+    └── notify.js     # C: 通知页逻辑
+backend/lambdas/
+├── get_upload_url/        # A: presigned URL + dedup Lambda
+├── query-by-tags/         # C: query 1 tags+min-counts (AND)
+├── query-by-species/      # C: query 2 by species
+├── query-thumbnail/       # C: query 3 thumbnail -> full image
+├── query-by-file/         # C: query 4 search by file (not stored)
+├── tags-bulk/             # C: query 5 bulk add/remove tags
+├── files-delete/          # C: query 6 delete files
+├── notify-subscribe/      # C: SNS subscribe
+├── notify-unsubscribe/    # C: SNS unsubscribe
+└── notify-list/           # C: list my subscriptions
+backend/processing_pipeline/   # B: thumbnails / 1fps frames / ML tagging / DB transaction
 docs/
 ├── TASK_DIVISION.md    # team task breakdown (3 members)
 ├── KNOWN_ISSUES.md     # deferred issues, priorities, fixes, and pipeline milestone
@@ -95,6 +119,7 @@ docs/
 ### 2. Configure
 Fill real values into `frontend/js/config.js`:
 - `region`, `cognitoClientId`, `cognitoUserPoolId`, `apiBaseUrl`, `bucketName`
+- `queryApiBaseUrl` — Member C's query/notification API (`pba-query-api`)
 - `cognitoClientSecret`: leave empty for a Public (secret-less) app client; fill it if your app client has a secret
 
 ### 3. Run locally
@@ -120,9 +145,14 @@ Open `http://localhost:8000` (must be localhost — `crypto.subtle` requires a s
 | Lambda | `pba-get-upload-url` | A |
 | API Gateway REST | `pba-api` (GET `/upload-url`, Cognito Authorizer) | A |
 | Lambda pipeline ×3 | (thumbnail / extract / tag) | B |
-| DynamoDB table + GSI | (files table) | C |
+| DynamoDB ×3 + GSIs | `files`, `file_tags`, `subscriptions` | C |
+| Query/Notify Lambda ×9 | `query-by-*`, `tags-bulk`, `files-delete`, `notify-*` | C |
+| API Gateway REST | `pba-query-api` (9 resources, Cognito Authorizer) | C |
+| SNS topic | `pba-tag-events` (B publishes, C consumes) | C |
 
 ## Team
 
 Task breakdown & contracts: [docs/TASK_DIVISION.md](docs/TASK_DIVISION.md) (Chinese)
 AWS console setup: [docs/AWS_SETUP_GUIDE.md](docs/AWS_SETUP_GUIDE.md) (Chinese)
+
+> ⚠️ Team report must include a Generative AI usage statement (§9 of the assignment), otherwise sections 6.2/6.3 score 0.
