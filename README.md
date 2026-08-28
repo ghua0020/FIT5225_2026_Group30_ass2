@@ -16,7 +16,7 @@ Users upload wildlife images/videos; the system automatically detects species wi
 | **Auth** (sign up / sign in / sign out, email verification, route guard) | A | ✅ Done |
 | **Upload** (SHA-256 checksum, dedup, presigned URL direct-to-S3) | A | ✅ Done |
 | **Processing pipeline** (thumbnails, 1 frame/sec video extraction, ML tagging, DB transaction) | B | ✅ Basic version implemented and locally verified; AWS deployment pending |
-| **Gallery** (thumbnail grid, tags, processing results) | B | 🚧 In development |
+| **Gallery** (thumbnail grid, tags, processing results) | B | ✅ Frontend implemented; protected `GET /files` integration required |
 | **Query APIs** (tag/species/URL/file queries, tag management, delete) | C | 🚧 In development |
 | **Notifications** (SNS tag subscriptions) | C | 🚧 In development |
 
@@ -68,15 +68,17 @@ Browser (frontend/)
 
 ```
 frontend/
-├── index.html        # entry page with nav (B/C links placeholder)
+├── index.html        # authentication-aware entry route to Gallery or Sign-up
 ├── signup.html       # sign up + email verification
 ├── login.html        # sign in
 ├── upload.html       # upload page
+├── gallery.html      # Member B processing status and media gallery
 ├── css/style.css     # shared minimal stylesheet
 └── js/
     ├── config.js     # ⚠️ ALL placeholders (YOUR_*) live here
     ├── auth.js       # shared auth utility (Cognito direct + session + apiGet)
-    └── upload.js     # checksum → presigned → PUT to S3
+    ├── upload.js     # checksum → presigned → PUT to S3
+    └── gallery.js    # pending uploads → processed thumbnail/tag grid
 backend/lambdas/get_upload_url/
 └── lambda_function.py  # presigned URL + dedup Lambda
 docs/

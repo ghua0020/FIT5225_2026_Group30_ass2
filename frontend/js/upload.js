@@ -6,6 +6,8 @@
 (function () {
   'use strict';
 
+  const PENDING_UPLOADS_KEY = 'pba_pending_uploads';
+
   // 路由守卫：未登录跳注册页
   if (!Auth.requireAuth()) return;
 
@@ -73,8 +75,27 @@
       throw new Error('S3 direct upload failed: HTTP ' + putResp.status + (detail ? ' — ' + detail : ''));
     }
 
+    rememberPendingUpload({
+      fileKey: data.fileKey,
+      fileName: file.name,
+      checksum: checksum,
+      contentType: contentType,
+      uploadedAt: Date.now()
+    });
     show('Uploaded: ' + file.name + ' → ' + data.fileKey + '. Processing will start automatically.', 'success');
     addLine(file.name, 'uploaded (' + data.fileKey + ')');
+    $('galleryLink').classList.remove('hidden');
+  }
+
+  /** Keep lightweight browser-side state until the Gallery API exposes the DB record. */
+  function rememberPendingUpload(item) {
+    let pending = [];
+    try {
+      pending = JSON.parse(localStorage.getItem(PENDING_UPLOADS_KEY)) || [];
+    } catch (e) { pending = []; }
+    pending = pending.filter(existing => existing.fileKey !== item.fileKey);
+    pending.unshift(item);
+    localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(pending.slice(0, 50)));
   }
 
   function addLine(name, status) {

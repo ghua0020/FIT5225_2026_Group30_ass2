@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gallery — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="gallery.html">Pacific BioArchive</a>
+    <a href="upload.html">Upload</a>
+    <a href="gallery.html" class="active" aria-current="page">Gallery</a>
+    <a href="query.html" class="disabled" title="Member C: in development">Search</a>
+    <a href="tags.html" class="disabled" title="Member C: in development">Tags</a>
+    <a href="notify.html" class="disabled" title="Member C: in development">Notifications</a>
+    <span class="user" id="userInfo"></span>
+    <button class="link" id="btnLogout">Sign out</button>
+  </nav>
+
+  <main class="container wide">
+    <section class="page-heading">
+      <div>
+        <p class="eyebrow">Processing Pipeline</p>
+        <h1>Media Gallery</h1>
+        <p class="subtitle">Track new uploads, review detected species, and open the original media.</p>
+      </div>
+      <button type="button" id="btnRefresh" class="refresh-button" aria-label="Refresh gallery">
+        Refresh
+      </button>
+    </section>
+
+    <section class="summary-grid" aria-label="Gallery summary">
+      <div class="summary-card">
+        <span class="summary-label">Processed</span>
+        <strong id="processedCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Processing</span>
+        <strong id="pendingCount">0</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">Species tags</span>
+        <strong id="speciesCount">0</strong>
+      </div>
+    </section>
+
+    <section class="gallery-panel">
+      <div class="gallery-toolbar">
+        <div class="filter-field grow">
+          <label for="gallerySearch">Filter by file name or species</label>
+          <input type="search" id="gallerySearch" placeholder="e.g. Felis_catus">
+        </div>
+        <div class="filter-field">
+          <label for="mediaTypeFilter">Media type</label>
+          <select id="mediaTypeFilter">
+            <option value="all">All media</option>
+            <option value="image">Images</option>
+            <option value="video">Videos</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="galleryMessage" class="gallery-message info" role="status" aria-live="polite">
+        Loading gallery…
+      </div>
+      <div id="galleryGrid" class="gallery-grid" aria-live="polite"></div>
+
+      <div id="emptyGallery" class="empty-state hidden">
+        <div class="empty-icon" aria-hidden="true">◫</div>
+        <h2>No media found</h2>
+        <p>Upload an image or video. It will appear here after the processing Lambda writes its record.</p>
+        <a class="btn" href="upload.html">Upload media</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/gallery.js"></script>
+</body>
+</html>

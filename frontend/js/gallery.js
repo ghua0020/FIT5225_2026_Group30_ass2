@@ -1,0 +1,323 @@
+/**
+ * Member B Gallery UI.
+ *
+ * Protected API contract (GET APP_CONFIG.endpoints.gallery):
+ *   { items: [{ file_id, checksum, file_type, tags, tag_counts,
+ *               full_url, thumb_url, created_at }] }
+ *
+ * The API may use `files`, `results`, `data`, or a bare array instead of
+ * `items`. Returned object URLs must be temporary browser-readable URLs; the
+ * browser never receives DynamoDB credentials or direct database access.
+ */
+(function () {
+  'use strict';
+
+  if (!Auth.requireAuth()) return;
+
+  const PENDING_UPLOADS_KEY = 'pba_pending_uploads';
+  const PENDING_RETENTION_MS = 24 * 60 * 60 * 1000;
+  const SLOW_PROCESSING_MS = 15 * 60 * 1000;
+  const AUTO_REFRESH_MS = 15000;
+
+  const $ = id => document.getElementById(id);
+  const grid = $('galleryGrid');
+  const message = $('galleryMessage');
+  const empty = $('emptyGallery');
+  const refreshButton = $('btnRefresh');
+  let processedItems = [];
+  let pendingItems = [];
+  let refreshTimer = null;
+
+  const user = Auth.getCurrentUser();
+  if (user) {
+    $('userInfo').textContent = displayName(user);
+  }
+
+  $('btnLogout').addEventListener('click', function () {
+    Auth.logout();
+    window.location.href = './index.html';
+  });
+  refreshButton.addEventListener('click', loadGallery);
+  $('gallerySearch').addEventListener('input', renderGallery);
+  $('mediaTypeFilter').addEventListener('change', renderGallery);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) loadGallery();
+  });
+
+  function displayName(currentUser) {
+    const name = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ');
+    return name ? name + ' (' + currentUser.email + ')' : currentUser.email;
+  }
+
+  function setMessage(text, type) {
+    message.textContent = text;
+    message.className = 'gallery-message ' + (type || 'info');
+    message.classList.toggle('hidden', !text);
+  }
+
+  function readPendingUploads() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(PENDING_UPLOADS_KEY)) || [];
+      const now = Date.now();
+      return parsed.filter(item => item && item.fileKey && now - Number(item.uploadedAt || 0) < PENDING_RETENTION_MS);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writePendingUploads(items) {
+    localStorage.setItem(PENDING_UPLOADS_KEY, JSON.stringify(items));
+  }
+
+  function normaliseApiItems(payload) {
+    if (!payload) return [];
+    if (typeof payload.body === 'string') {
+      try { return normaliseApiItems(JSON.parse(payload.body)); } catch (e) { return []; }
+    }
+    const candidates = Array.isArray(payload)
+      ? payload
+      : (payload.items || payload.files || payload.results || payload.data || []);
+    return Array.isArray(candidates) ? candidates.map(normaliseRecord).filter(Boolean) : [];
+  }
+
+  function dynamoValue(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    if (Object.prototype.hasOwnProperty.call(value, 'S')) return value.S;
+    if (Object.prototype.hasOwnProperty.call(value, 'N')) return Number(value.N);
+    if (Object.prototype.hasOwnProperty.call(value, 'BOOL')) return value.BOOL;
+    if (Object.prototype.hasOwnProperty.call(value, 'L')) return value.L.map(dynamoValue);
+    if (Object.prototype.hasOwnProperty.call(value, 'M')) return mapValues(value.M);
+    return value;
+  }
+
+  function mapValues(record) {
+    return Object.fromEntries(Object.entries(record || {}).map(([key, value]) => [key, dynamoValue(value)]));
+  }
+
+  function normaliseRecord(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const item = mapValues(raw);
+    const fullUrl = item.full_url || item.fullUrl || item.url || '';
+    const thumbUrl = item.thumb_url || item.thumbUrl || item.thumbnail_url || item.thumbnailUrl || '';
+    const tags = normaliseTags(item.tags, item.tag_counts || item.tagCounts);
+    return {
+      fileId: String(item.file_id || item.fileId || fullUrl || ''),
+      checksum: String(item.checksum || '').toLowerCase(),
+      fileType: String(item.file_type || item.fileType || inferMediaType(fullUrl)).toLowerCase(),
+      fileName: String(item.file_name || item.fileName || fileNameFromUrl(fullUrl) || 'Processed media'),
+      fullUrl: String(fullUrl),
+      thumbUrl: String(thumbUrl),
+      tags: tags,
+      createdAt: Number(item.created_at || item.createdAt || 0),
+      status: 'processed'
+    };
+  }
+
+  function normaliseTags(tags, counts) {
+    const countMap = counts && typeof counts === 'object' ? mapValues(counts) : {};
+    if (!Array.isArray(tags)) return [];
+    return tags.map(tag => {
+      if (typeof tag === 'string') return { name: tag, count: Number(countMap[tag] || 1) };
+      const value = mapValues(tag || {});
+      return { name: String(value.name || value.tag || ''), count: Number(value.count || countMap[value.name] || 1) };
+    }).filter(tag => tag.name);
+  }
+
+  function inferMediaType(url) {
+    const path = String(url).split('?')[0].toLowerCase();
+    return /\.(mp4|mov|avi|mkv|webm|m4v)$/.test(path) ? 'video' : 'image';
+  }
+
+  function fileNameFromUrl(url) {
+    try {
+      const path = new URL(url).pathname;
+      return decodeURIComponent(path.substring(path.lastIndexOf('/') + 1));
+    } catch (e) {
+      const plain = String(url).split('?')[0];
+      return decodeURIComponent(plain.substring(plain.lastIndexOf('/') + 1));
+    }
+  }
+
+  function pendingMatchesRecord(pending, record) {
+    if (pending.checksum && record.checksum && pending.checksum.toLowerCase() === record.checksum) return true;
+    try {
+      return decodeURIComponent(new URL(record.fullUrl).pathname).endsWith('/' + pending.fileKey);
+    } catch (e) {
+      return record.fullUrl.includes(pending.fileKey);
+    }
+  }
+
+  function reconcilePending() {
+    pendingItems = pendingItems.filter(pending => !processedItems.some(record => pendingMatchesRecord(pending, record)));
+    writePendingUploads(pendingItems);
+  }
+
+  async function loadGallery() {
+    if (refreshButton.disabled) return;
+    refreshButton.disabled = true;
+    refreshButton.textContent = 'Refreshing…';
+    pendingItems = readPendingUploads();
+    renderGallery();
+    setMessage('Loading processed media…', 'info');
+
+    try {
+      const endpoint = (APP_CONFIG.endpoints && APP_CONFIG.endpoints.gallery) || 'files';
+      const data = await Auth.apiGet(endpoint);
+      processedItems = normaliseApiItems(data).sort((a, b) => b.createdAt - a.createdAt);
+      reconcilePending();
+      setMessage('Gallery is up to date. New uploads are checked automatically.', 'success');
+    } catch (error) {
+      setMessage('Unable to load processed media: ' + error.message, 'error');
+    } finally {
+      refreshButton.disabled = false;
+      refreshButton.textContent = 'Refresh';
+      renderGallery();
+      scheduleRefresh();
+    }
+  }
+
+  function scheduleRefresh() {
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(loadGallery, AUTO_REFRESH_MS);
+  }
+
+  function filteredItems() {
+    const query = $('gallerySearch').value.trim().toLowerCase();
+    const type = $('mediaTypeFilter').value;
+    const pending = pendingItems.map(item => ({
+      fileId: item.fileKey,
+      checksum: item.checksum || '',
+      fileType: String(item.contentType || '').startsWith('video/') ? 'video' : 'image',
+      fileName: item.fileName || fileNameFromUrl(item.fileKey),
+      fullUrl: '',
+      thumbUrl: '',
+      tags: [],
+      createdAt: Number(item.uploadedAt || 0),
+      status: 'processing',
+      fileKey: item.fileKey
+    }));
+    return pending.concat(processedItems).filter(item => {
+      const typeMatches = type === 'all' || item.fileType === type;
+      const searchable = [item.fileName].concat(item.tags.map(tag => tag.name)).join(' ').toLowerCase();
+      return typeMatches && (!query || searchable.includes(query));
+    });
+  }
+
+  function renderGallery() {
+    grid.replaceChildren();
+    const items = filteredItems();
+    items.forEach(item => grid.appendChild(createCard(item)));
+    grid.classList.toggle('hidden', items.length === 0);
+    empty.classList.toggle('hidden', items.length !== 0);
+    updateSummary();
+  }
+
+  function updateSummary() {
+    $('processedCount').textContent = String(processedItems.length);
+    $('pendingCount').textContent = String(pendingItems.length);
+    const species = new Set();
+    processedItems.forEach(item => item.tags.forEach(tag => species.add(tag.name)));
+    $('speciesCount').textContent = String(species.size);
+  }
+
+  function createCard(item) {
+    const article = document.createElement('article');
+    article.className = 'media-card ' + (item.status === 'processing' ? 'is-processing' : '');
+
+    const preview = document.createElement(item.fullUrl ? 'a' : 'div');
+    preview.className = 'media-preview';
+    if (item.fullUrl) {
+      preview.href = item.fullUrl;
+      preview.target = '_blank';
+      preview.rel = 'noopener noreferrer';
+      preview.setAttribute('aria-label', 'Open full-size ' + item.fileName);
+    }
+
+    if (item.status === 'processing') {
+      preview.appendChild(iconPlaceholder(item.fileType === 'video' ? '▶' : '◫', 'Processing'));
+      const pulse = document.createElement('span');
+      pulse.className = 'processing-pulse';
+      preview.appendChild(pulse);
+    } else if (item.fileType === 'image' && item.thumbUrl) {
+      const image = document.createElement('img');
+      image.src = item.thumbUrl;
+      image.alt = 'Thumbnail of ' + item.fileName;
+      image.loading = 'lazy';
+      image.addEventListener('error', function () {
+        image.replaceWith(iconPlaceholder('!', 'Thumbnail unavailable'));
+      }, { once: true });
+      preview.appendChild(image);
+    } else {
+      preview.appendChild(iconPlaceholder(item.fileType === 'video' ? '▶' : '◫', item.fileType === 'video' ? 'Video' : 'Image'));
+    }
+
+    const body = document.createElement('div');
+    body.className = 'media-card-body';
+    const status = document.createElement('span');
+    status.className = 'status-badge ' + item.status;
+    status.textContent = statusText(item);
+
+    const title = document.createElement('h2');
+    title.textContent = item.fileName;
+    title.title = item.fileName;
+
+    const meta = document.createElement('div');
+    meta.className = 'media-meta';
+    meta.textContent = mediaLabel(item.fileType) + ' · ' + formatDate(item.createdAt);
+
+    const tags = document.createElement('div');
+    tags.className = 'tag-list';
+    if (item.tags.length) {
+      item.tags.forEach(tag => {
+        const chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        chip.textContent = tag.name + (tag.count > 1 ? ' ×' + tag.count : '');
+        tags.appendChild(chip);
+      });
+    } else {
+      const noTags = document.createElement('span');
+      noTags.className = 'no-tags';
+      noTags.textContent = item.status === 'processing' ? 'Species detection in progress' : 'No species detected';
+      tags.appendChild(noTags);
+    }
+
+    body.append(status, title, meta, tags);
+    article.append(preview, body);
+    return article;
+  }
+
+  function iconPlaceholder(symbol, label) {
+    const box = document.createElement('div');
+    box.className = 'preview-placeholder';
+    const icon = document.createElement('span');
+    icon.className = 'preview-icon';
+    icon.textContent = symbol;
+    const text = document.createElement('span');
+    text.textContent = label;
+    box.append(icon, text);
+    return box;
+  }
+
+  function statusText(item) {
+    if (item.status !== 'processing') return 'Processed';
+    return Date.now() - item.createdAt > SLOW_PROCESSING_MS ? 'Taking longer' : 'Processing';
+  }
+
+  function mediaLabel(type) {
+    return type === 'video' ? 'Video' : 'Image';
+  }
+
+  function formatDate(epoch) {
+    if (!epoch) return 'Date unavailable';
+    const value = epoch < 100000000000 ? epoch * 1000 : epoch;
+    try {
+      return new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium', timeStyle: 'short'
+      }).format(new Date(value));
+    } catch (e) {
+      return new Date(value).toLocaleString();
+    }
+  }
+
+  loadGallery();
+})();
