@@ -66,6 +66,10 @@ def _subscribed_tags(user_sub):
 
 
 def _sns_subscription_arn(email):
+    """返回该 topic 上 email 对应的订阅 ARN；无订阅返回 None。
+    SNS 对未确认的 email 订阅显示 "pending confirmation"（非完整 ARN）。
+    这里仍原样返回该字符串作为"已有订阅记录"标记；是否可用由调用方用
+    startswith("arn:aws:sns:") 判断。"""
     token = None
     while True:
         kwargs = {"TopicArn": TOPIC_ARN}
@@ -74,10 +78,7 @@ def _sns_subscription_arn(email):
         resp = _sns.list_subscriptions_by_topic(**kwargs)
         for sub in resp.get("Subscriptions", []):
             if sub.get("Protocol") == "email" and sub.get("Endpoint") == email:
-                arn = sub.get("SubscriptionArn", "")
-                if arn and not arn.startswith("PendingConfirmation"):
-                    return arn
-                return None
+                return sub.get("SubscriptionArn", "") or None
         token = resp.get("NextToken")
         if not token:
             break
@@ -106,25 +107,31 @@ def lambda_handler(event, context):
     if not remove_tags:
         return _json(400, {"error": "field 'tags' must be a non-empty array"})
 
+    # 只删真正订阅过的标签（未订阅的忽略，V2 §9）
+    subscribed = set(_subscribed_tags(user_sub))
     removed = []
     for tag in remove_tags:
+        if tag not in subscribed:
+            continue
         try:
             _table.delete_item(Key={"user_sub": user_sub, "tag": tag})
             removed.append(tag)
         except Exception:
-            pass  # 未订阅的标签忽略
+            pass  # 单行删除失败不影响其余
 
-    remaining = _subscribed_tags(user_sub)
+    remaining = sorted(subscribed - set(removed))
 
     if TOPIC_ARN:
         arn = _sns_subscription_arn(email)
-        if not remaining:
-            if arn:
+        # 仅对真实完整 ARN 操作；"pending confirmation"（未确认）跳过，
+        # 否则 SetSubscriptionAttributes / Unsubscribe 会因非法 ARN 报错
+        if arn and arn.startswith("arn:aws:sns:"):
+            if not remaining:
                 try:
                     _sns.unsubscribe(SubscriptionArn=arn)
                 except Exception:
                     pass
-        elif arn:
-            _apply_filter_policy(arn, remaining)
+            else:
+                _apply_filter_policy(arn, remaining)
 
     return _json(200, {"removed": sorted(removed), "remaining": remaining})

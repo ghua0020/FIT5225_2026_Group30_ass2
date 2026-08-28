@@ -67,7 +67,10 @@ def _subscribed_tags(user_sub):
 
 
 def _sns_subscription_arn(email):
-    """在该 topic 上查找 email 对应的订阅 ARN（None 表示尚无订阅）"""
+    """返回该 topic 上 email 对应的订阅 ARN；无订阅返回 None。
+    SNS 对未确认的 email 订阅显示 "pending confirmation"（非完整 ARN）。
+    这里仍原样返回该字符串作为"已有订阅记录"标记，避免重复 subscribe 产生多条待确认订阅；
+    是否可用由调用方用 startswith("arn:aws:sns:") 判断。"""
     token = None
     while True:
         kwargs = {"TopicArn": TOPIC_ARN}
@@ -76,11 +79,7 @@ def _sns_subscription_arn(email):
         resp = _sns.list_subscriptions_by_topic(**kwargs)
         for sub in resp.get("Subscriptions", []):
             if sub.get("Protocol") == "email" and sub.get("Endpoint") == email:
-                arn = sub.get("SubscriptionArn", "")
-                # PendingConfirmation 表示邮件订阅尚未确认，按未生效处理
-                if arn and not arn.startswith("PendingConfirmation"):
-                    return arn
-                return None
+                return sub.get("SubscriptionArn", "") or None
         token = resp.get("NextToken")
         if not token:
             break
@@ -127,8 +126,11 @@ def lambda_handler(event, context):
         created = True
 
     # 3. 更新 FilterPolicy 为用户订阅的全部标签
+    #    仅当拿到真实完整 ARN（arn:aws:sns:...）才设置；SNS 对 email 首次 subscribe
+    #    返回的是 "PendingConfirmation"（非完整 ARN），此时 SetSubscriptionAttributes 会
+    #    报 "An ARN must have at least 6 elements" —— 待用户点确认邮件生效后再设置
     all_tags = _subscribed_tags(user_sub)
-    if arn and not arn.startswith("PendingConfirmation"):
+    if arn and arn.startswith("arn:aws:sns:"):
         _apply_filter_policy(arn, all_tags)
 
     return _json(
