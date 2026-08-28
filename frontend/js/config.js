@@ -16,6 +16,12 @@ window.APP_CONFIG = {
 
   /* ---- API Gateway（Step 5）---- */
   apiBaseUrl: 'https://5asagf7xx0.execute-api.us-east-1.amazonaws.com/prod/',  // 末尾必须带 /
+  endpoints: {
+    uploadUrl: 'upload-url',
+    // Member C's protected API must return completed files with temporary,
+    // browser-readable thumbnail/full URLs. See js/gallery.js for the contract.
+    gallery: 'files'
+  },
 
   /* ---- S3（Step 2）---- */
   bucketName: 'fit5225-s3-bucket-513636860535-us-east-1-an',

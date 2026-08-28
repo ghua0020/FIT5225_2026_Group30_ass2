@@ -202,7 +202,19 @@
       window.location.href = './signup.html';
       throw new Error('Session expired, please sign in again.');
     }
-    return resp.json();
+    let data = null;
+    try {
+      data = await resp.json();
+    } catch (e) {
+      data = null;
+    }
+    if (!resp.ok) {
+      const message = data && (data.error || data.message);
+      const err = new Error(message || ('API request failed: HTTP ' + resp.status));
+      err.status = resp.status;
+      throw err;
+    }
+    return data;
   }
 
   /* ---------- 导出 ---------- */
