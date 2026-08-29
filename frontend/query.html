@@ -4,99 +4,118 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Search — Pacific BioArchive</title>
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    .card section { margin-top: 22px; padding-top: 18px; border-top: 1px solid #e2e6ea; }
-    .card section:first-child { margin-top: 0; padding-top: 0; border-top: none; }
-    .row { display: flex; gap: 8px; align-items: center; }
-    .row input[type="text"], .row input[type="url"] { flex: 1; margin: 0; }
-    .row button { margin: 0; }
-    textarea { width: 100%; padding: 9px 10px; border: 1px solid #c9d0d8; border-radius: 6px; font-size: 13px; font-family: Consolas, monospace; }
-    .results { margin-top: 16px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-    .grid a { display: block; }
-    .grid img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; border: 1px solid #dfe3e8; }
-    .grid .label { font-size: 12px; color: #6b7684; text-align: center; word-break: break-all; }
-    .videos a { display: block; color: #2d6fc3; word-break: break-all; margin-bottom: 4px; font-size: 13px; }
-  </style>
+  <link rel="stylesheet" href="css/style.css?v=20260829-2">
 </head>
 <body>
   <nav class="navbar">
-    <span class="brand">Pacific BioArchive</span>
-    <a href="index.html">Home</a>
+    <a class="brand" href="gallery.html">Pacific BioArchive</a>
     <a href="upload.html">Upload</a>
-    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
-    <a href="query.html">Search</a>
+    <a href="gallery.html">Gallery</a>
+    <a href="query.html" class="active" aria-current="page">Search</a>
     <a href="tags.html">Tags</a>
     <a href="notify.html">Notifications</a>
     <span class="user" id="userInfo"></span>
     <button class="link" id="btnLogout">Sign out</button>
   </nav>
 
-  <div class="container" style="max-width: 860px;">
-    <div class="card">
-      <h1>Search media</h1>
-      <p class="subtitle">Query tagged wildlife media. Results show image thumbnails (click to open the full image) and full video links.</p>
+  <main class="container wide search-page">
+    <section class="page-heading search-heading compact-heading">
+      <div>
+        <p class="eyebrow">Media search</p>
+        <h1>Find wildlife media</h1>
+        <p class="subtitle">Enter a species name to find matching images and videos.</p>
+      </div>
+      <a class="search-manage-link" href="tags.html">Manage tags <span aria-hidden="true">→</span></a>
+    </section>
 
-      <!-- 查询①：按标签 + 最低计数（AND） -->
-      <section>
-        <h3>1. By tags with minimum counts</h3>
-        <label for="qTags">JSON tag counts (all must be satisfied, logical AND)</label>
-        <textarea id="qTags" rows="2">{"koala": 2, "wombat": 1}</textarea>
-        <div class="row" style="margin-top:10px;">
-          <button type="button" id="btnByTags">Search by tags</button>
+    <section class="search-primary-card" aria-labelledby="speciesSearchTitle">
+      <div class="search-primary-copy">
+        <span class="search-step">Recommended</span>
+        <h2 id="speciesSearchTitle">Search by species</h2>
+        <p>Use the scientific name stored in the detection tags.</p>
+      </div>
+      <label for="qSpecies">Species name</label>
+      <div class="search-control-row">
+        <input type="text" id="qSpecies" list="speciesList" placeholder="Try Felis_catus" autocomplete="off">
+        <button type="button" id="btnBySpecies">Search</button>
+      </div>
+      <div class="search-suggestions" aria-label="Species suggestions">
+        <span>Examples:</span>
+        <button type="button" data-species="Felis_catus">Felis_catus</button>
+        <button type="button" data-species="Dama_dama">Dama_dama</button>
+        <button type="button" data-species="Sus_scrofa">Sus_scrofa</button>
+      </div>
+    </section>
+
+    <details class="search-advanced">
+      <summary>
+        <span><strong>Advanced search</strong><small>Use tag counts, a reference image, or a thumbnail URL</small></span>
+        <span class="search-advanced-chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div class="search-advanced-body">
+        <div class="search-tabs" role="tablist" aria-label="Advanced search methods">
+          <button class="search-tab active" type="button" role="tab" aria-selected="true" aria-controls="panelTags" id="tabTags" data-query-tab="tags">Tag counts</button>
+          <button class="search-tab" type="button" role="tab" aria-selected="false" aria-controls="panelFile" id="tabFile" data-query-tab="file">Reference image</button>
+          <button class="search-tab" type="button" role="tab" aria-selected="false" aria-controls="panelThumb" id="tabThumb" data-query-tab="thumbnail">Thumbnail URL</button>
         </div>
-      </section>
 
-      <!-- 查询②：按物种 -->
-      <section>
-        <h3>2. By species</h3>
-        <label for="qSpecies">Species name (files containing at least one of it)</label>
-        <div class="row">
-          <input type="text" id="qSpecies" list="speciesList" placeholder="e.g. koala">
-          <button type="button" id="btnBySpecies">Search by species</button>
+        <div class="search-panel active" id="panelTags" role="tabpanel" aria-labelledby="tabTags" data-query-panel="tags">
+          <h3>Match minimum tag counts</h3>
+          <p>All listed conditions must match.</p>
+          <label for="qTags">Tag-count object</label>
+          <textarea id="qTags" rows="3" spellcheck="false">{"Felis_catus": 1}</textarea>
+          <div class="search-example">Example: <code>{"Felis_catus": 1, "Dama_dama": 2}</code></div>
+          <button type="button" id="btnByTags">Search tag counts</button>
         </div>
-      </section>
 
-      <!-- 查询③：缩略图 URL 反查原图 -->
-      <section>
-        <h3>3. Thumbnail URL &rarr; full image</h3>
-        <label for="qThumb">Paste a thumbnail URL</label>
-        <div class="row">
-          <input type="url" id="qThumb" placeholder="https://.../thumbnails/...">
-          <button type="button" id="btnThumb">Resolve</button>
+        <div class="search-panel" id="panelFile" role="tabpanel" aria-labelledby="tabFile" data-query-panel="file" hidden>
+          <h3>Search using a reference image</h3>
+          <p>Species are detected in memory. The reference image is not stored.</p>
+          <label class="search-file-drop" for="qFile">
+            <span class="search-file-icon" aria-hidden="true">↑</span>
+            <strong>Choose an image</strong>
+            <span>JPEG or PNG, up to 4 MiB</span>
+            <input type="file" id="qFile" accept="image/*">
+          </label>
+          <div class="search-file-meta" id="qFileMeta">No image selected</div>
+          <button type="button" id="btnByFile">Detect and search</button>
         </div>
-      </section>
 
-      <!-- 查询④：按文件查询 -->
-      <section>
-        <h3>4. Upload a file to find similar</h3>
-        <label for="qFile">Send an image; the system detects its species and finds matching files (the file itself is not stored)</label>
-        <input type="file" id="qFile" accept="image/*">
-        <div class="row" style="margin-top:10px;">
-          <button type="button" id="btnByFile">Search by file</button>
+        <div class="search-panel" id="panelThumb" role="tabpanel" aria-labelledby="tabThumb" data-query-panel="thumbnail" hidden>
+          <h3>Open an original image</h3>
+          <p>Paste one of this archive's thumbnail URLs.</p>
+          <label for="qThumb">Thumbnail URL</label>
+          <input type="url" id="qThumb" placeholder="https://…/thumbnails/…">
+          <button type="button" id="btnThumb">Resolve original</button>
         </div>
-      </section>
+      </div>
+    </details>
 
-      <section>
-        <h3>Add / remove tags or delete files</h3>
-        <p style="font-size:13px;color:#6b7684;">
-          Bulk tag operations and file deletion are on the <a href="tags.html" style="color:#2d6fc3;">Tags</a> page.
-        </p>
-      </section>
-
-      <div class="results" id="results"></div>
-    </div>
-  </div>
+    <section class="search-results-panel" aria-labelledby="resultsTitle">
+      <div class="search-results-header">
+        <h2 id="resultsTitle">Results</h2>
+        <span class="search-result-count" id="resultCount">Ready</span>
+      </div>
+      <div class="results" id="results" aria-live="polite">
+        <div class="search-empty-state">
+          <span aria-hidden="true">⌕</span>
+          <h3>No search yet</h3>
+          <p>Enter a species name above, then select Search.</p>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <datalist id="speciesList">
-    <option value="koala"></option><option value="wombat"></option>
-    <option value="magpie"></option><option value="dingo"></option>
+    <option value="Felis_catus"></option>
+    <option value="Dama_dama"></option>
+    <option value="Wallabia_bicolor"></option>
+    <option value="Sus_scrofa"></option>
   </datalist>
 
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/query.js"></script>
+  <script src="js/query.js?v=20260829-2"></script>
 </body>
 </html>

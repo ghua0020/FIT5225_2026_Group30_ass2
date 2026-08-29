@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 import re
 import tempfile
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
+
+from PIL import Image, UnidentifiedImageError
 
 from .config import Settings
 from .media import create_thumbnail, detect_media_type, extract_video_frames
@@ -64,6 +67,42 @@ class ProcessingService:
         relative_path = PurePosixPath(relative)
         target = relative_path.with_suffix(".jpg")
         return f"{self.settings.thumbnail_prefix.rstrip('/')}/{target.as_posix()}"
+
+    def detect_query_image(self, raw: bytes) -> dict:
+        """Detect tags in an API query image without writing S3, DynamoDB or SNS."""
+        if not raw:
+            raise ValueError("query image is empty")
+        if len(raw) > self.settings.query_image_max_bytes:
+            raise ValueError(
+                f"query image exceeds {self.settings.query_image_max_bytes} bytes"
+            )
+        try:
+            with Image.open(BytesIO(raw)) as image:
+                image.verify()
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise ValueError("query payload is not a valid image") from exc
+
+        local_models = (
+            self.settings.local_md_model_path,
+            self.settings.local_species_model_path,
+            self.settings.local_labels_path,
+        )
+        if not self.settings.model_bucket and not all(local_models):
+            raise RuntimeError("MODEL_BUCKET must be configured for query detection")
+
+        with tempfile.TemporaryDirectory(prefix="pba-query-") as temp_dir:
+            image_path = Path(temp_dir) / "query-image"
+            image_path.write_bytes(raw)
+            bundle = self.model_provider.get_bundle(self.settings.model_bucket)
+            inference = bundle.predict_file(image_path)
+
+        return {
+            "tags": [
+                {"name": tag["name"], "count": int(tag.get("count", 0))}
+                for tag in inference.get("tags", [])
+                if tag.get("name")
+            ]
+        }
 
     def process(self, bucket: str, key: str) -> dict:
         if not key.startswith(self.settings.upload_prefix):

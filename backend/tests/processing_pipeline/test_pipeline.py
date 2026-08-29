@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 from datetime import datetime, timezone
+from io import BytesIO
 
 from PIL import Image
 import pytest
@@ -116,3 +117,36 @@ def test_video_results_are_summed() -> None:
     assert result["detection_count"] == 3
     assert result["tags"][0]["count"] == 3
     assert result["tags"][0]["confidence"] == 0.9
+
+
+def test_query_detection_returns_tags_without_storage_writes() -> None:
+    raw = BytesIO()
+    Image.new("RGB", (32, 24), "green").save(raw, format="PNG")
+    storage = object()
+    repository = FakeRepository()
+    service = ProcessingService(
+        storage,
+        repository,
+        FakeModelProvider(),
+        Settings(
+            files_table="files",
+            file_tags_table="file_tags",
+            model_bucket="media-bucket",
+        ),
+    )
+
+    result = service.detect_query_image(raw.getvalue())
+
+    assert result == {"tags": [{"name": "Felis_catus", "count": 1}]}
+    assert repository.records == []
+
+
+def test_query_detection_rejects_non_image_bytes() -> None:
+    service = ProcessingService(
+        object(),
+        FakeRepository(),
+        FakeModelProvider(),
+        Settings(model_bucket="media-bucket"),
+    )
+    with pytest.raises(ValueError, match="not a valid image"):
+        service.detect_query_image(b"not an image")

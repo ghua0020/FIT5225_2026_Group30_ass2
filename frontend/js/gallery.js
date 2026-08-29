@@ -1,9 +1,9 @@
 /**
  * Member B Gallery UI.
  *
- * Protected API contract (GET APP_CONFIG.endpoints.gallery):
+ * Protected query API contract (GET APP_CONFIG.endpoints.gallery):
  *   { items: [{ file_id, checksum, file_type, tags, tag_counts,
- *               full_url, thumb_url, created_at }] }
+ *               full_url, thumb_url, created_at }], next_cursor: string|null }
  *
  * The API may use `files`, `results`, `data`, or a bare array instead of
  * `items`. Returned object URLs must be temporary browser-readable URLs; the
@@ -152,6 +152,23 @@
     writePendingUploads(pendingItems);
   }
 
+  async function fetchProcessedItems(endpoint) {
+    const items = [];
+    let cursor = '';
+    let pageCount = 0;
+    do {
+      const path = cursor
+        ? endpoint + '?cursor=' + encodeURIComponent(cursor)
+        : endpoint;
+      const payload = await Api.get(path);
+      items.push(...normaliseApiItems(payload));
+      cursor = payload && payload.next_cursor ? String(payload.next_cursor) : '';
+      pageCount += 1;
+      if (pageCount > 1000) throw new Error('Gallery pagination did not terminate.');
+    } while (cursor);
+    return items;
+  }
+
   async function loadGallery() {
     if (refreshButton.disabled) return;
     refreshButton.disabled = true;
@@ -162,8 +179,8 @@
 
     try {
       const endpoint = (APP_CONFIG.endpoints && APP_CONFIG.endpoints.gallery) || 'files';
-      const data = await Auth.apiGet(endpoint);
-      processedItems = normaliseApiItems(data).sort((a, b) => b.createdAt - a.createdAt);
+      processedItems = (await fetchProcessedItems(endpoint))
+        .sort((a, b) => b.createdAt - a.createdAt);
       reconcilePending();
       setMessage('Gallery is up to date. New uploads are checked automatically.', 'success');
     } catch (error) {

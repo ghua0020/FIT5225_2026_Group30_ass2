@@ -9,12 +9,15 @@ window.APP_CONFIG = {
 
   /* ---- Cognito ---- */
   cognitoClientId: 'YOUR_COGNITO_CLIENT_ID',
-  cognitoClientSecret: '',               // Public(无 secret) 客户端留空即可
   cognitoUserPoolId: 'YOUR_COGNITO_USER_POOL_ID',
 
   /* ---- API Gateway ---- */
   apiBaseUrl: 'YOUR_UPLOAD_API_BASE_URL/',    // 成员 A 的上传 API（末尾带 /）
   queryApiBaseUrl: 'YOUR_QUERY_API_BASE_URL/',// 成员 C 的查询/通知 API（末尾带 /）
+  endpoints: {
+    uploadUrl: 'upload-url',
+    gallery: 'files'
+  },
 
   /* ---- S3 ---- */
   bucketName: 'YOUR_S3_BUCKET',

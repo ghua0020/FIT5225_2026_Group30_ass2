@@ -34,6 +34,7 @@ class Settings:
     classifier_confidence: float = 0.0
     thumbnail_max_size: int = 480
     thumbnail_quality: int = 80
+    query_image_max_bytes: int = 4 * 1024 * 1024
     notify_topic_arn: str = ""
     local_md_model_path: str = ""
     local_species_model_path: str = ""
@@ -58,6 +59,9 @@ class Settings:
             classifier_confidence=_as_float("CLASSIFIER_CONFIDENCE", 0.0),
             thumbnail_max_size=_as_int("THUMBNAIL_MAX_SIZE", 480),
             thumbnail_quality=_as_int("THUMBNAIL_QUALITY", 80),
+            query_image_max_bytes=_as_int(
+                "QUERY_IMAGE_MAX_BYTES", 4 * 1024 * 1024
+            ),
             notify_topic_arn=os.environ.get("NOTIFY_TOPIC_ARN", ""),
             local_md_model_path=os.environ.get("LOCAL_MD_MODEL_PATH", ""),
             local_species_model_path=os.environ.get("LOCAL_SPECIES_MODEL_PATH", ""),

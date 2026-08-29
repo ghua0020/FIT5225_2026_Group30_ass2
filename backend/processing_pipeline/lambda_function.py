@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 from typing import Any
@@ -19,6 +21,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 _service: ProcessingService | None = None
+QUERY_OPERATION = "detect-query"
 
 
 def _build_service() -> ProcessingService:
@@ -51,9 +54,45 @@ def _get_service() -> ProcessingService:
     return _service
 
 
+def _proxy_response(status_code: int, body: dict) -> dict:
+    return {
+        "statusCode": status_code,
+        "body": json.dumps(body, ensure_ascii=False),
+    }
+
+
+def _handle_query_image(event: dict, service: ProcessingService) -> dict:
+    encoded = event.get("base64")
+    if not isinstance(encoded, str) or not encoded.strip():
+        return _proxy_response(400, {"error": "base64 image is required"})
+    encoded = encoded.strip()
+
+    max_bytes = service.settings.query_image_max_bytes
+    max_encoded_length = 4 * ((max_bytes + 2) // 3)
+    if len(encoded) > max_encoded_length:
+        return _proxy_response(413, {"error": "query image exceeds 4 MiB"})
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return _proxy_response(400, {"error": "base64 image is invalid"})
+    if len(raw) > max_bytes:
+        return _proxy_response(413, {"error": "query image exceeds 4 MiB"})
+
+    try:
+        return _proxy_response(200, service.detect_query_image(raw))
+    except ValueError as exc:
+        return _proxy_response(400, {"error": str(exc)})
+    except Exception:
+        logger.exception("Query image detection failed")
+        return _proxy_response(500, {"error": "query image detection failed"})
+
+
 def lambda_handler(event: dict, context: Any) -> dict:
-    results = []
     service = _get_service()
+    if event.get("operation") == QUERY_OPERATION:
+        return _handle_query_image(event, service)
+
+    results = []
     for event_record in event.get("Records", []):
         if event_record.get("eventSource") != "aws:s3":
             logger.info("Ignoring non-S3 event record")
