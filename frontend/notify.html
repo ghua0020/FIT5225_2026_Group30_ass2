@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Notifications — Pacific BioArchive</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260830-1">
   <style>
     .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
     .chip {
@@ -23,13 +23,12 @@
 </head>
 <body>
   <nav class="navbar">
-    <span class="brand">Pacific BioArchive</span>
-    <a href="index.html">Home</a>
+    <a class="brand" href="gallery.html">Pacific BioArchive</a>
     <a href="upload.html">Upload</a>
-    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="gallery.html">Gallery</a>
     <a href="query.html">Search</a>
     <a href="tags.html">Tags</a>
-    <a href="notify.html">Notifications</a>
+    <a href="notify.html" class="active" aria-current="page">Notifications</a>
     <span class="user" id="userInfo"></span>
     <button class="link" id="btnLogout">Sign out</button>
   </nav>
@@ -66,6 +65,6 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/notify.js"></script>
+  <script src="js/notify.js?v=20260830-3"></script>
 </body>
 </html>

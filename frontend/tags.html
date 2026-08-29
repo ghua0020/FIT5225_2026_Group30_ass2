@@ -4,65 +4,99 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tags — Pacific BioArchive</title>
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    textarea { width: 100%; padding: 9px 10px; border: 1px solid #c9d0d8; border-radius: 6px; font-size: 13px; font-family: Consolas, monospace; }
-    .ops { margin-top: 12px; }
-    .ops label { display: inline-flex; align-items: center; gap: 6px; margin: 0 16px 0 0; font-size: 14px; }
-    .result { margin-top: 16px; font-size: 13px; }
-    .result pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
-  </style>
+  <link rel="stylesheet" href="css/style.css?v=20260830-7">
 </head>
 <body>
   <nav class="navbar">
-    <span class="brand">Pacific BioArchive</span>
-    <a href="index.html">Home</a>
+    <a class="brand" href="gallery.html">Pacific BioArchive</a>
     <a href="upload.html">Upload</a>
-    <a href="gallery.html" class="disabled" title="Member B: in development">Gallery</a>
+    <a href="gallery.html">Gallery</a>
     <a href="query.html">Search</a>
-    <a href="tags.html">Tags</a>
+    <a href="tags.html" class="active" aria-current="page">Tags</a>
     <a href="notify.html">Notifications</a>
     <span class="user" id="userInfo"></span>
     <button class="link" id="btnLogout">Sign out</button>
   </nav>
 
-  <div class="container" style="max-width: 860px;">
-    <div class="card">
-      <h1>Tag management</h1>
-      <p class="subtitle">Bulk add/remove tags on files and delete files. Paste one URL per line (image or video URLs, original or thumbnail).</p>
+  <main class="container wide management-page">
+    <section class="page-heading compact-heading">
+      <div>
+        <h1>Manage tags and files</h1>
+        <p class="subtitle">Update archive metadata in bulk or permanently remove stored media.</p>
+      </div>
+    </section>
 
-      <section>
-        <h3>Bulk add / remove tags</h3>
-        <label for="mgmtUrls">File URLs (one per line)</label>
-        <textarea id="mgmtUrls" rows="4" placeholder="https://.../thumbnails/...&#10;https://.../uploads/..."></textarea>
-        <label for="mgmtTags">Tags to add or remove (comma separated)</label>
-        <input type="text" id="mgmtTags" list="speciesList" placeholder="koala, wombat">
-        <div class="ops">
+    <div class="management-grid">
+      <section class="management-card" aria-labelledby="bulkTagsTitle">
+        <div class="management-card-heading">
+          <div>
+            <h2 id="bulkTagsTitle">Bulk edit tags</h2>
+            <p>Add or remove species tags across one or more files.</p>
+          </div>
+        </div>
+        <label id="mgmtUrlsLabel">File URLs</label>
+        <div class="bulk-url-list" id="mgmtUrlList" aria-labelledby="mgmtUrlsLabel">
+          <div class="bulk-url-row">
+            <input type="url" class="bulk-url-input" placeholder="Paste an original or thumbnail URL copied from Gallery" aria-label="File URL 1">
+            <button type="button" class="secondary bulk-url-remove" aria-label="Remove file URL 1">Remove</button>
+          </div>
+        </div>
+        <button type="button" id="btnAddMgmtUrl" class="secondary add-url-button">+ Add another URL</button>
+        <p class="field-help">Add one database URL per field. Use Add another URL to edit multiple files.</p>
+        <label for="mgmtTags">Species tags (comma separated)</label>
+        <input type="text" id="mgmtTags" list="speciesList" placeholder="Felis_catus, Dama_dama">
+        <fieldset class="management-options">
+          <legend>Operation</legend>
           <label><input type="radio" name="op" value="1" checked> Add tags</label>
           <label><input type="radio" name="op" value="0"> Remove tags</label>
-          <button type="button" id="btnBulk">Apply</button>
+        </fieldset>
+        <button type="button" id="btnBulk">Apply tag changes</button>
+      </section>
+
+      <section class="management-card danger-card" aria-labelledby="deleteFilesTitle">
+        <div class="management-card-heading">
+          <div>
+            <h2 id="deleteFilesTitle">Delete files</h2>
+            <p>Remove media, thumbnails, and related database records.</p>
+          </div>
         </div>
+        <label id="delUrlsLabel">File URLs to delete</label>
+        <div class="delete-url-list" id="delUrlList" aria-labelledby="delUrlsLabel">
+          <div class="delete-url-row">
+            <input type="url" class="delete-url-input" placeholder="Paste an original or thumbnail URL copied from Gallery" aria-label="File URL 1">
+            <button type="button" class="secondary delete-url-remove" aria-label="Remove file URL 1">Remove</button>
+          </div>
+        </div>
+        <button type="button" id="btnAddDeleteUrl" class="secondary add-url-button">+ Add another URL</button>
+        <p class="field-help">Add one URL per field. Use Add another URL to delete multiple files.</p>
+        <div class="danger-note"><strong>Permanent action</strong><span>Both the original object and its thumbnail will be removed.</span></div>
+        <button type="button" id="btnDelete" class="danger-button">Delete selected files</button>
       </section>
-
-      <section style="margin-top:26px; padding-top:20px; border-top:1px solid #e2e6ea;">
-        <h3>Delete files</h3>
-        <label for="delUrls">File URLs to delete (one per line)</label>
-        <textarea id="delUrls" rows="4" placeholder="https://.../thumbnails/..."></textarea>
-        <button type="button" id="btnDelete">Delete files</button>
-      </section>
-
-      <div class="result" id="result"></div>
     </div>
-  </div>
+
+    <section class="management-results-panel" aria-labelledby="managementResultsTitle">
+      <div class="management-results-header">
+        <h2 id="managementResultsTitle">Activity</h2>
+        <span class="management-result-status" id="resultStatus">Ready</span>
+      </div>
+      <div class="management-result" id="result" aria-live="polite">
+        <div class="management-empty-state">
+          <span aria-hidden="true">✓</span>
+          <h3>No changes yet</h3>
+          <p>Completed tag edits and deletions will be reported here.</p>
+        </div>
+      </div>
+    </section>
+  </main>
 
   <datalist id="speciesList">
-    <option value="koala"></option><option value="wombat"></option>
-    <option value="magpie"></option><option value="dingo"></option>
+    <option value="Felis_catus"></option><option value="Dama_dama"></option>
+    <option value="Sus_scrofa"></option><option value="Wallabia_bicolor"></option>
   </datalist>
 
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/tags.js"></script>
+  <script src="js/tags.js?v=20260830-7"></script>
 </body>
 </html>

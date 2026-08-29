@@ -13,6 +13,40 @@
   const $ = id => document.getElementById(id);
   const resultsEl = $('results');
   const resultCountEl = $('resultCount');
+  const user = Auth.getCurrentUser();
+  const SEARCH_STATE_KEY = 'pba_search_page_state:' + String((user && (user.sub || user.email)) || 'anonymous');
+  let restoringState = false;
+  let lastResult = null;
+
+  if (user) {
+    $('userInfo').textContent = user.firstName + ' ' + user.lastName + ' (' + user.email + ')';
+  }
+
+  function readSearchState() {
+    try {
+      return JSON.parse(sessionStorage.getItem(SEARCH_STATE_KEY)) || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveSearchState() {
+    if (restoringState) return;
+    const activeTab = document.querySelector('[data-query-tab].active');
+    const advanced = document.querySelector('.search-advanced');
+    try {
+      sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({
+        species: $('qSpecies').value,
+        tagCounts: $('qTags').value,
+        thumbnailUrl: $('qThumb').value,
+        activeTab: activeTab ? activeTab.dataset.queryTab : 'tags',
+        advancedOpen: Boolean(advanced && advanced.open),
+        result: lastResult
+      }));
+    } catch (error) {
+      // The page remains functional if browser storage is unavailable or full.
+    }
+  }
 
   /* ---------- 查询方式切换 ---------- */
   const tabs = Array.from(document.querySelectorAll('[data-query-tab]'));
@@ -30,6 +64,7 @@
       panel.classList.toggle('active', active);
       panel.hidden = !active;
     });
+    saveSearchState();
   }
 
   tabs.forEach((tab, index) => {
@@ -51,12 +86,9 @@
     });
   });
 
-  // 导航栏用户信息 + 登出
-  const user = Auth.getCurrentUser();
-  if (user) {
-    $('userInfo').textContent = user.firstName + ' ' + user.lastName + ' (' + user.email + ')';
-  }
+  // 导航栏登出
   $('btnLogout').addEventListener('click', function () {
+    sessionStorage.removeItem(SEARCH_STATE_KEY);
     Auth.logout();
     window.location.href = './index.html';
   });
@@ -137,6 +169,8 @@
         }
       });
     });
+    lastResult = { kind: 'results', payload: data };
+    saveSearchState();
   }
 
   function renderOriginalResult(data) {
@@ -149,6 +183,8 @@
     resultsEl.innerHTML = '<div class="search-result-section"><h3>Original image</h3>' +
       '<a class="search-original-link" href="' + escapeHtml(url) +
       '" target="_blank" rel="noopener"><span aria-hidden="true">↗</span>Open the full-size image</a></div>';
+    lastResult = { kind: 'original', payload: data };
+    saveSearchState();
   }
 
   function escapeHtml(s) {
@@ -158,12 +194,16 @@
   }
 
   function showError(err) {
+    const message = String(err.message || err);
     resultCountEl.textContent = 'Error';
     resultsEl.innerHTML = '<div class="search-alert error"><strong>Search failed.</strong><br>' +
-      escapeHtml(err.message || err) + '</div>';
+      escapeHtml(message) + '</div>';
+    lastResult = { kind: 'error', payload: message };
+    saveSearchState();
   }
 
   async function run(fn, button, renderer = renderResults, loadingText = 'Searching archive…') {
+    saveSearchState();
     resultCountEl.textContent = 'Searching';
     resultsEl.innerHTML = '<div class="search-loading"><span class="search-spinner" aria-hidden="true"></span>' +
       '<span>' + escapeHtml(loadingText) + '</span></div>';
@@ -268,4 +308,32 @@
   $('qTags').addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') $('btnByTags').click();
   });
+
+  ['qSpecies', 'qTags', 'qThumb'].forEach(id => {
+    $(id).addEventListener('input', saveSearchState);
+  });
+  document.querySelector('.search-advanced').addEventListener('toggle', saveSearchState);
+
+  function restoreSearchState() {
+    const state = readSearchState();
+    restoringState = true;
+    if (typeof state.species === 'string') $('qSpecies').value = state.species;
+    if (typeof state.tagCounts === 'string') $('qTags').value = state.tagCounts;
+    if (typeof state.thumbnailUrl === 'string') $('qThumb').value = state.thumbnailUrl;
+    document.querySelector('.search-advanced').open = Boolean(state.advancedOpen);
+    activateTab(state.activeTab || 'tags');
+    restoringState = false;
+
+    if (state.result && state.result.kind === 'results') {
+      renderResults(state.result.payload || {});
+    } else if (state.result && state.result.kind === 'original') {
+      renderOriginalResult(state.result.payload || {});
+    } else if (state.result && state.result.kind === 'error') {
+      showError({ message: state.result.payload || 'Search failed.' });
+    } else {
+      saveSearchState();
+    }
+  }
+
+  restoreSearchState();
 })();

@@ -3,7 +3,8 @@
  *
  * Protected query API contract (GET APP_CONFIG.endpoints.gallery):
  *   { items: [{ file_id, checksum, file_type, tags, tag_counts,
- *               full_url, thumb_url, created_at }], next_cursor: string|null }
+ *               full_url, thumb_url, full_url_source, thumb_url_source,
+ *               created_at }], next_cursor: string|null }
  *
  * The API may use `files`, `results`, `data`, or a bare array instead of
  * `items`. Returned object URLs must be temporary browser-readable URLs; the
@@ -29,17 +30,30 @@
   let refreshTimer = null;
 
   const user = Auth.getCurrentUser();
+  const GALLERY_STATE_KEY = 'pba_gallery_page_state:' + String((user && (user.sub || user.email)) || 'anonymous');
   if (user) {
     $('userInfo').textContent = displayName(user);
   }
+  const galleryState = readGalleryState();
+  if (typeof galleryState.search === 'string') $('gallerySearch').value = galleryState.search;
+  if (['all', 'image', 'video'].includes(galleryState.mediaType)) {
+    $('mediaTypeFilter').value = galleryState.mediaType;
+  }
 
   $('btnLogout').addEventListener('click', function () {
+    sessionStorage.removeItem(GALLERY_STATE_KEY);
     Auth.logout();
     window.location.href = './index.html';
   });
   refreshButton.addEventListener('click', loadGallery);
-  $('gallerySearch').addEventListener('input', renderGallery);
-  $('mediaTypeFilter').addEventListener('change', renderGallery);
+  $('gallerySearch').addEventListener('input', function () {
+    saveGalleryState();
+    renderGallery();
+  });
+  $('mediaTypeFilter').addEventListener('change', function () {
+    saveGalleryState();
+    renderGallery();
+  });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) loadGallery();
   });
@@ -99,6 +113,8 @@
     const item = mapValues(raw);
     const fullUrl = item.full_url || item.fullUrl || item.url || '';
     const thumbUrl = item.thumb_url || item.thumbUrl || item.thumbnail_url || item.thumbnailUrl || '';
+    const fullUrlSource = item.full_url_source || item.fullUrlSource || '';
+    const thumbUrlSource = item.thumb_url_source || item.thumbUrlSource || '';
     const tags = normaliseTags(item.tags, item.tag_counts || item.tagCounts);
     return {
       fileId: String(item.file_id || item.fileId || fullUrl || ''),
@@ -107,6 +123,8 @@
       fileName: String(item.file_name || item.fileName || fileNameFromUrl(fullUrl) || 'Processed media'),
       fullUrl: String(fullUrl),
       thumbUrl: String(thumbUrl),
+      fullUrlSource: String(fullUrlSource),
+      thumbUrlSource: String(thumbUrlSource),
       tags: tags,
       createdAt: Number(item.created_at || item.createdAt || 0),
       status: 'processed'
@@ -136,6 +154,42 @@
       const plain = String(url).split('?')[0];
       return decodeURIComponent(plain.substring(plain.lastIndexOf('/') + 1));
     }
+  }
+
+  function readGalleryState() {
+    try {
+      return JSON.parse(sessionStorage.getItem(GALLERY_STATE_KEY)) || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveGalleryState() {
+    try {
+      sessionStorage.setItem(GALLERY_STATE_KEY, JSON.stringify({
+        search: $('gallerySearch').value,
+        mediaType: $('mediaTypeFilter').value
+      }));
+    } catch (error) {
+      // The Gallery remains functional if browser storage is unavailable.
+    }
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const field = document.createElement('textarea');
+    field.value = text;
+    field.readOnly = true;
+    field.style.position = 'fixed';
+    field.style.opacity = '0';
+    document.body.appendChild(field);
+    field.select();
+    const copied = document.execCommand('copy');
+    field.remove();
+    if (!copied) throw new Error('Clipboard access was denied.');
   }
 
   function pendingMatchesRecord(pending, record) {
@@ -208,6 +262,8 @@
       fileName: item.fileName || fileNameFromUrl(item.fileKey),
       fullUrl: '',
       thumbUrl: '',
+      fullUrlSource: '',
+      thumbUrlSource: '',
       tags: [],
       createdAt: Number(item.uploadedAt || 0),
       status: 'processing',
@@ -299,8 +355,42 @@
     }
 
     body.append(status, title, meta, tags);
+    if (item.status === 'processed' && item.fileType === 'image' && (item.thumbUrlSource || item.fullUrlSource)) {
+      const actions = document.createElement('div');
+      actions.className = 'media-card-actions';
+      if (item.thumbUrlSource) {
+        actions.appendChild(copyUrlButton('Copy thumbnail URL', item.thumbUrlSource));
+      }
+      if (item.fullUrlSource) {
+        actions.appendChild(copyUrlButton('Copy original URL', item.fullUrlSource));
+      }
+      body.appendChild(actions);
+    }
     article.append(preview, body);
     return article;
+  }
+
+  function copyUrlButton(label, url) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'copy-url-button';
+    button.textContent = label;
+    button.title = label + ' stored in DynamoDB';
+    button.addEventListener('click', async function () {
+      button.disabled = true;
+      try {
+        await copyText(url);
+        button.textContent = 'Copied';
+      } catch (error) {
+        button.textContent = 'Copy failed';
+      }
+      window.setTimeout(() => {
+        if (!button.isConnected) return;
+        button.textContent = label;
+        button.disabled = false;
+      }, 1800);
+    });
+    return button;
   }
 
   function iconPlaceholder(symbol, label) {

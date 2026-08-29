@@ -22,6 +22,15 @@ class FakeSnsClient:
         self.request = kwargs
 
 
+class FakeS3Client:
+    def __init__(self):
+        self.request = None
+
+    def generate_presigned_url(self, operation, **kwargs):
+        self.request = {"operation": operation, **kwargs}
+        return "https://signed.example/cat.jpg"
+
+
 def test_repository_writes_files_and_file_tags_transaction() -> None:
     client = FakeDynamoClient()
     repository = DynamoMediaRepository(client, "files", "file_tags")
@@ -46,17 +55,31 @@ def test_repository_writes_files_and_file_tags_transaction() -> None:
 
 def test_sns_message_matches_contract() -> None:
     client = FakeSnsClient()
-    notifier = SnsNotifier(client, "arn:aws:sns:us-east-1:123:pba-tag-events")
+    s3_client = FakeS3Client()
+    notifier = SnsNotifier(
+        client,
+        "arn:aws:sns:us-east-1:123:pba-tag-events",
+        s3_client=s3_client,
+        url_expiry=3600,
+    )
     notifier.publish(
         {
             "file_id": "file-id",
             "tags": ["Felis_catus"],
-            "full_url": "https://example/cat.jpg",
+            "full_url": "https://media-bucket.s3.us-east-1.amazonaws.com/uploads/cat.jpg",
             "created_at": 1787800123456,
         }
     )
     body = json.loads(client.request["Message"])
     assert body["tags"] == ["Felis_catus"]
+    assert body["full_url"].endswith("/uploads/cat.jpg")
+    assert body["temporary_url"] == "https://signed.example/cat.jpg"
+    assert body["temporary_url_expires_in"] == 3600
+    assert s3_client.request == {
+        "operation": "get_object",
+        "Params": {"Bucket": "media-bucket", "Key": "uploads/cat.jpg"},
+        "ExpiresIn": 3600,
+    }
     assert client.request["MessageAttributes"]["tags"] == {
         "DataType": "String.Array",
         "StringValue": '["Felis_catus"]',

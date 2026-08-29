@@ -11,12 +11,13 @@ Pacific BioArchive — tags-bulk Lambda（成员 C）
   FILES_TABLE / FILE_TAGS_TABLE    files / file_tags（默认）
   THUMB_INDEX / FULL_INDEX         thumb-index / full-index（默认）
   NOTIFY_TOPIC_ARN                 pba-tag-events 主题 ARN（可选）
-IAM 要求：dynamodb:Get/Put/Query/TransactWriteItems + sns:Publish（Step 2.2 统一策略）
+  NOTIFY_URL_EXPIRY                临时查看 URL 有效秒数（默认 3600）
+IAM 要求：dynamodb:Get/Put/Query/TransactWriteItems + sns:Publish + s3:GetObject
 """
 import json
 import os
 import time
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -27,12 +28,14 @@ FILE_TAGS_TABLE = os.environ.get("FILE_TAGS_TABLE", "file_tags")
 THUMB_INDEX = os.environ.get("THUMB_INDEX", "thumb-index")
 FULL_INDEX = os.environ.get("FULL_INDEX", "full-index")
 TOPIC_ARN = os.environ.get("NOTIFY_TOPIC_ARN", "")
+NOTIFY_URL_EXPIRY = int(os.environ.get("NOTIFY_URL_EXPIRY", "3600"))
 
 _dynamodb = boto3.resource("dynamodb")
 _dynamodb_client = boto3.client("dynamodb")
 _files = _dynamodb.Table(FILES_TABLE)
 _file_tags = _dynamodb.Table(FILE_TAGS_TABLE)
 _sns = boto3.client("sns")
+_s3 = boto3.client("s3")
 
 _serializer = TypeSerializer()
 
@@ -85,23 +88,47 @@ def _resolve_item(raw_url):
     return _files.get_item(Key={"file_id": file_id}).get("Item")
 
 
+def _temporary_url(full_url):
+    """为私有 S3 原始对象生成邮件中可直接打开的短期 GET URL。"""
+    try:
+        parsed = urlsplit(full_url)
+        if parsed.scheme == "s3":
+            bucket = parsed.netloc
+        else:
+            hostname = parsed.hostname or ""
+            marker = hostname.find(".s3")
+            bucket = hostname[:marker] if marker > 0 else ""
+        key = unquote(parsed.path.lstrip("/"))
+        if not bucket or not key:
+            return None
+        return _s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=NOTIFY_URL_EXPIRY,
+        )
+    except Exception:
+        return None
+
+
 def _publish_update(file_id, tags, full_url):
     """标签变更后向 SNS 发布事件（带 tags MessageAttributes 供 filter policy 路由）。
     空标签列表不发（V2 §10）。"""
     if not TOPIC_ARN or not tags:
         return
     try:
+        message = {
+            "file_id": file_id,
+            "tags": sorted(tags),
+            "full_url": full_url,
+            "created_at": int(time.time() * 1000),
+        }
+        temporary_url = _temporary_url(full_url)
+        if temporary_url:
+            message["temporary_url"] = temporary_url
+            message["temporary_url_expires_in"] = NOTIFY_URL_EXPIRY
         _sns.publish(
             TopicArn=TOPIC_ARN,
-            Message=json.dumps(
-                {
-                    "file_id": file_id,
-                    "tags": sorted(tags),
-                    "full_url": full_url,
-                    "created_at": int(time.time() * 1000),
-                },
-                ensure_ascii=False,
-            ),
+            Message=json.dumps(message, ensure_ascii=False),
             MessageAttributes={
                 "tags": {
                     "DataType": "String.Array",

@@ -34,7 +34,14 @@ def _build_service() -> ProcessingService:
     dynamodb = boto3.client("dynamodb")
     sns_client = boto3.client("sns") if settings.notify_topic_arn else None
     notifier = (
-        SnsNotifier(sns_client, settings.notify_topic_arn) if sns_client is not None else None
+        SnsNotifier(
+            sns_client,
+            settings.notify_topic_arn,
+            s3_client=s3_client,
+            url_expiry=settings.notify_url_expiry,
+        )
+        if sns_client is not None
+        else None
     )
     return ProcessingService(
         storage=S3Storage(s3_client, settings.region),

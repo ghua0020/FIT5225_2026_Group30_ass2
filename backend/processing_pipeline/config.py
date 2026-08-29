@@ -36,6 +36,7 @@ class Settings:
     thumbnail_quality: int = 80
     query_image_max_bytes: int = 4 * 1024 * 1024
     notify_topic_arn: str = ""
+    notify_url_expiry: int = 3600
     local_md_model_path: str = ""
     local_species_model_path: str = ""
     local_labels_path: str = ""
@@ -63,6 +64,7 @@ class Settings:
                 "QUERY_IMAGE_MAX_BYTES", 4 * 1024 * 1024
             ),
             notify_topic_arn=os.environ.get("NOTIFY_TOPIC_ARN", ""),
+            notify_url_expiry=_as_int("NOTIFY_URL_EXPIRY", 3600),
             local_md_model_path=os.environ.get("LOCAL_MD_MODEL_PATH", ""),
             local_species_model_path=os.environ.get("LOCAL_SPECIES_MODEL_PATH", ""),
             local_labels_path=os.environ.get("LOCAL_LABELS_PATH", ""),

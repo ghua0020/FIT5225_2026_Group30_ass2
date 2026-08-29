@@ -158,6 +158,10 @@ def _gallery_item(raw_item: dict) -> dict:
         "tag_counts": item.get("tag_counts", {}),
         "full_url": _presign(full_url),
         "thumb_url": _presign(thumb_url),
+        # Preserve the exact values stored in DynamoDB for management and
+        # integration testing. These are object identifiers, not public URLs.
+        "full_url_source": full_url,
+        "thumb_url_source": thumb_url,
         "created_at": item.get("created_at", 0),
     }
 

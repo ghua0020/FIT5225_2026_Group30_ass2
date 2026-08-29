@@ -6,7 +6,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 
@@ -119,9 +119,44 @@ class DynamoMediaRepository:
 
 
 class SnsNotifier:
-    def __init__(self, client: Any, topic_arn: str) -> None:
+    def __init__(
+        self,
+        client: Any,
+        topic_arn: str,
+        s3_client: Any | None = None,
+        url_expiry: int = 3600,
+    ) -> None:
         self.client = client
         self.topic_arn = topic_arn
+        self.s3_client = s3_client
+        self.url_expiry = url_expiry
+
+    @staticmethod
+    def _s3_location(url: str) -> tuple[str, str]:
+        parsed = urlsplit(url)
+        if parsed.scheme == "s3":
+            bucket = parsed.netloc
+        else:
+            hostname = parsed.hostname or ""
+            marker = hostname.find(".s3")
+            bucket = hostname[:marker] if marker > 0 else ""
+        key = unquote(parsed.path.lstrip("/"))
+        if not bucket or not key:
+            raise ValueError("full_url is not a supported S3 object URL")
+        return bucket, key
+
+    def _temporary_url(self, full_url: str) -> str | None:
+        if self.s3_client is None:
+            return None
+        try:
+            bucket, key = self._s3_location(full_url)
+            return self.s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": bucket, "Key": key},
+                ExpiresIn=self.url_expiry,
+            )
+        except Exception:
+            return None
 
     def publish(self, record: dict) -> None:
         tag_names = list(record.get("tags") or [])
@@ -133,6 +168,10 @@ class SnsNotifier:
             "full_url": record["full_url"],
             "created_at": record["created_at"],
         }
+        temporary_url = self._temporary_url(record["full_url"])
+        if temporary_url:
+            message["temporary_url"] = temporary_url
+            message["temporary_url_expires_in"] = self.url_expiry
         self.client.publish(
             TopicArn=self.topic_arn,
             Message=json.dumps(message),

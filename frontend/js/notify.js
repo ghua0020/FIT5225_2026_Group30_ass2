@@ -13,10 +13,12 @@
   const msgEl = $('msg');
 
   const user = Auth.getCurrentUser();
+  const NOTIFY_STATE_KEY = 'pba_notify_page_state:' + String((user && (user.sub || user.email)) || 'anonymous');
   if (user) {
     $('userInfo').textContent = user.firstName + ' ' + user.lastName + ' (' + user.email + ')';
   }
   $('btnLogout').addEventListener('click', function () {
+    sessionStorage.removeItem(NOTIFY_STATE_KEY);
     Auth.logout();
     window.location.href = './index.html';
   });
@@ -27,9 +29,30 @@
     return div.innerHTML;
   }
 
+  function readNotifyState() {
+    try {
+      return JSON.parse(sessionStorage.getItem(NOTIFY_STATE_KEY)) || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function saveNotifyState() {
+    try {
+      sessionStorage.setItem(NOTIFY_STATE_KEY, JSON.stringify({
+        draft: $('subTags').value,
+        message: msgEl.textContent,
+        messageClass: msgEl.className
+      }));
+    } catch (error) {
+      // The page remains functional if browser storage is unavailable.
+    }
+  }
+
   function show(text, cls) {
     msgEl.className = 'msg ' + (cls || 'info');
     msgEl.textContent = text;
+    saveNotifyState();
   }
 
   function renderChips(tags) {
@@ -65,12 +88,21 @@
     if (!tags.length) { show('Please enter at least one species.', 'error'); return; }
     Api.post('notify/subscribe', { tags: tags })
       .then(r => {
-        show(r.message || 'Subscribed.', 'success');
         $('subTags').value = '';
+        show(r.message || 'Subscribed.', 'success');
         loadSubscriptions();
       })
       .catch(err => show(err.message, 'error'));
   });
+
+  $('subTags').addEventListener('input', saveNotifyState);
+
+  const notifyState = readNotifyState();
+  if (typeof notifyState.draft === 'string') $('subTags').value = notifyState.draft;
+  if (notifyState.message) {
+    msgEl.textContent = notifyState.message;
+    msgEl.className = notifyState.messageClass || 'msg info';
+  }
 
   loadSubscriptions();
 })();

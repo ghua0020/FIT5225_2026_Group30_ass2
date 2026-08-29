@@ -97,6 +97,8 @@ def test_lists_files_with_presigned_urls_and_json_numbers(monkeypatch) -> None:
             "created_at": 1787911023000,
             "full_url": "https://signed.invalid/uploads/cat.jpg",
             "thumb_url": "https://signed.invalid/thumbnails/cat.jpg",
+            "full_url_source": "https://media-bucket.s3.us-east-1.amazonaws.com/uploads/cat.jpg",
+            "thumb_url_source": "https://media-bucket.s3.us-east-1.amazonaws.com/thumbnails/cat.jpg",
         }
     ]
     assert body["next_cursor"]
