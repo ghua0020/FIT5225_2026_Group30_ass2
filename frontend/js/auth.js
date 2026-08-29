@@ -19,22 +19,6 @@
   const USER_KEY = 'pba_username';
 
   /* ---------- 底层：调用 Cognito API ---------- */
-  /** SECRET_HASH = Base64(HMAC-SHA256(clientSecret, username + clientId))；
-   *  未配置 client secret 时返回 undefined（JSON.stringify 自动省略该字段，Public client 不受影响） */
-  async function computeSecretHash(username) {
-    if (!CFG.cognitoClientSecret) return undefined;
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(CFG.cognitoClientSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    const msg = new TextEncoder().encode(username + CFG.cognitoClientId);
-    const sig = await crypto.subtle.sign('HMAC', key, msg);
-    return btoa(String.fromCharCode(...new Uint8Array(sig)));
-  }
-
   async function cognitoRequest(action, body) {
     const resp = await fetch(COGNITO_ENDPOINT, {
       method: 'POST',
@@ -54,11 +38,16 @@
   }
 
   /* ---------- 会话管理 ---------- */
-  function saveSession(authResult, username) {
+  function saveSession(authResult, username, existingRefreshToken) {
+    // Cognito normally omits RefreshToken from a refresh response. Keep the
+    // original token so the session can be refreshed more than once.
+    const current = getSession();
+    const refreshToken = authResult.RefreshToken || existingRefreshToken ||
+      (current && current.refreshToken) || null;
     localStorage.setItem(TOKEN_KEY, JSON.stringify({
       idToken: authResult.IdToken,
       accessToken: authResult.AccessToken,
-      refreshToken: authResult.RefreshToken,
+      refreshToken: refreshToken,
       expiresAt: Date.now() + (authResult.ExpiresIn || 3600) * 1000
     }));
     if (username) localStorage.setItem(USER_KEY, username);
@@ -82,7 +71,6 @@
   async function signUp(email, firstName, lastName, password) {
     const data = await cognitoRequest('SignUp', {
       ClientId: CFG.cognitoClientId,
-      SecretHash: await computeSecretHash(email),
       Username: email,
       Password: password,
       UserAttributes: [
@@ -97,7 +85,6 @@
   async function confirmSignUp(username, code) {
     return cognitoRequest('ConfirmSignUp', {
       ClientId: CFG.cognitoClientId,
-      SecretHash: await computeSecretHash(username),
       Username: username,
       ConfirmationCode: code
     });
@@ -106,7 +93,6 @@
   async function resendCode(username) {
     return cognitoRequest('ResendConfirmationCode', {
       ClientId: CFG.cognitoClientId,
-      SecretHash: await computeSecretHash(username),
       Username: username
     });
   }
@@ -117,8 +103,7 @@
       AuthFlow: 'USER_PASSWORD_AUTH',
       AuthParameters: {
         USERNAME: username,
-        PASSWORD: password,
-        SECRET_HASH: await computeSecretHash(username)
+        PASSWORD: password
       }
     });
     if (data.ChallengeName) {
@@ -129,8 +114,7 @@
     return data.AuthenticationResult;
   }
 
-  /** 用 refresh token 刷新会话（token 过期时自动调用）
-   *  REFRESH_TOKEN_AUTH 的 SECRET_HASH 按 Cognito 官方 SDK 约定以 clientId 作为 username 计算 */
+  /** 用 refresh token 刷新会话（token 过期时自动调用）。 */
   async function refreshSession() {
     const s = getSession();
     if (!s || !s.refreshToken) return null;
@@ -139,11 +123,10 @@
         ClientId: CFG.cognitoClientId,
         AuthFlow: 'REFRESH_TOKEN_AUTH',
         AuthParameters: {
-          REFRESH_TOKEN: s.refreshToken,
-          SECRET_HASH: await computeSecretHash(CFG.cognitoClientId)
+          REFRESH_TOKEN: s.refreshToken
         }
       });
-      saveSession(data.AuthenticationResult, localStorage.getItem(USER_KEY));
+      saveSession(data.AuthenticationResult, localStorage.getItem(USER_KEY), s.refreshToken);
       return data.AuthenticationResult;
     } catch (e) {
       logout();

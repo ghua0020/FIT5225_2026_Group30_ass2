@@ -16,7 +16,7 @@ Users upload wildlife images/videos; the system automatically detects species wi
 | **Auth** (sign up / sign in / sign out, email verification, route guard) | A | ✅ Done |
 | **Upload** (SHA-256 checksum, dedup, presigned URL direct-to-S3) | A | ✅ Done |
 | **Processing pipeline** (thumbnails, 1 frame/sec video extraction, ML tagging, DB transaction) | B | ✅ Basic version implemented and locally verified; AWS deployment pending |
-| **Gallery** (thumbnail grid, tags, processing results) | B | ✅ Frontend implemented; protected `GET /files` integration required |
+| **Gallery** (thumbnail grid, tags, processing results) | B | ✅ Frontend and `GET /files` Lambda implemented; AWS route deployment required |
 | **Query APIs** (tag/species/URL/file queries, tag management, delete) | C | ✅ Code done (deployment: `docs/C_QUERY_SETUP_GUIDE.md`) |
 | **Notifications** (SNS tag subscriptions) | C | ✅ Code done (deployment: `docs/C_QUERY_SETUP_GUIDE.md`) |
 
@@ -103,6 +103,7 @@ backend/lambdas/
 ├── query-by-file/         # C: query 4 search by file (not stored)
 ├── tags-bulk/             # C: query 5 bulk add/remove tags
 ├── files-delete/          # C: query 6 delete files
+├── files-list/            # B: paginated Gallery list with temporary S3 URLs
 ├── notify-subscribe/      # C: SNS subscribe
 ├── notify-unsubscribe/    # C: SNS unsubscribe
 └── notify-list/           # C: list my subscriptions
@@ -123,7 +124,7 @@ docs/
 ### 2. Configure
 Fill real values into `frontend/js/config.js`:
 - `region`, `cognitoClientId`, `cognitoUserPoolId`, `apiBaseUrl`, `bucketName`
-- `cognitoClientSecret`: leave empty for a Public (secret-less) app client; fill it if your app client has a secret
+- The browser must use a Cognito Public App Client. Never place a client secret in frontend code.
 
 ### 3. Run locally
 ```

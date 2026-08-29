@@ -8,18 +8,16 @@ window.APP_CONFIG = {
   region: 'us-east-1',               // 你的 AWS 区域（与创建资源时一致）
 
   /* ---- Cognito（Step 1）---- */
-  cognitoClientId: '37n7349bmavmjkbnqgb1acjghp',   // App client 的 Client ID
-  // 若 App client 勾选了 "Generate a client secret"，必须把 secret 填在这里（代码会自动计算 SECRET_HASH）；
-  // 推荐改为无 secret 的 Public client 并留空（见 AWS_SETUP_GUIDE.md FAQ）。
-  cognitoClientSecret: '1asb4m9smhfvrs6qn1bhrv6gn2nenvtp72heoq1g0vf9j04ppp9s',
+  // Browser applications must use a Public App Client without a client secret.
+  cognitoClientId: '2kn1kguo5sdppudknrp9udu7tu',
   cognitoUserPoolId: 'us-east-1_rThAMvbnC',          // 仅 B/C 配置 API Gateway Authorizer 时使用
 
   /* ---- API Gateway（Step 5）---- */
   apiBaseUrl: 'https://5asagf7xx0.execute-api.us-east-1.amazonaws.com/prod/',  // 末尾必须带 /
+  queryApiBaseUrl: 'https://r76wx5np2g.execute-api.us-east-1.amazonaws.com/prod/',
   endpoints: {
     uploadUrl: 'upload-url',
-    // Member C's protected API must return completed files with temporary,
-    // browser-readable thumbnail/full URLs. See js/gallery.js for the contract.
+    // Served by queryApiBaseUrl; returns browser-readable Presigned URLs.
     gallery: 'files'
   },
 
