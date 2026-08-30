@@ -9,13 +9,14 @@ Pacific BioArchive — notify-subscribe Lambda（成员 C）
 环境变量（Lambda 中配置）：
   SUBSCRIPTIONS_TABLE    subscriptions（默认）
   NOTIFY_TOPIC_ARN       pba-tag-events 主题 ARN（必填）
-IAM 要求：dynamodb:Query/Put + sns:Subscribe/List/SetSubscriptionAttributes（Step 2.2 统一策略）
+IAM 要求：dynamodb:Query/Scan/Put + sns:Subscribe/List/SetSubscriptionAttributes（Step 2.2 统一策略）
 """
 import json
 import os
 import time
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 
 TABLE = os.environ.get("SUBSCRIPTIONS_TABLE", "subscriptions")
 TOPIC_ARN = os.environ.get("NOTIFY_TOPIC_ARN", "")
@@ -53,7 +54,7 @@ def _subscribed_tags(user_sub):
     while True:
         kwargs = {
             "KeyConditionExpression": (
-                boto3.dynamodb.conditions.Key("user_sub").eq(user_sub)
+                Key("user_sub").eq(user_sub)
             )
         }
         if last_key:
@@ -66,11 +67,25 @@ def _subscribed_tags(user_sub):
     return sorted({it["tag"] for it in items})
 
 
-def _sns_subscription_arn(email):
-    """返回该 topic 上 email 对应的订阅 ARN；无订阅返回 None。
-    SNS 对未确认的 email 订阅显示 "pending confirmation"（非完整 ARN）。
-    这里仍原样返回该字符串作为"已有订阅记录"标记，避免重复 subscribe 产生多条待确认订阅；
-    是否可用由调用方用 startswith("arn:aws:sns:") 判断。"""
+def _email_subscribed_tags(email):
+    """汇总同一邮箱下全部 Cognito identity 的标签，避免账号之间覆盖 SNS policy。"""
+    items = []
+    last_key = None
+    while True:
+        kwargs = {"FilterExpression": Attr("email").eq(email)}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = _table.scan(**kwargs)
+        items.extend(resp.get("Items", []))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return sorted({it["tag"] for it in items})
+
+
+def _sns_subscriptions(email):
+    """返回邮箱在 topic 上的全部订阅；包含 pending 项以避免重复创建。"""
+    matches = []
     token = None
     while True:
         kwargs = {"TopicArn": TOPIC_ARN}
@@ -79,11 +94,11 @@ def _sns_subscription_arn(email):
         resp = _sns.list_subscriptions_by_topic(**kwargs)
         for sub in resp.get("Subscriptions", []):
             if sub.get("Protocol") == "email" and sub.get("Endpoint") == email:
-                return sub.get("SubscriptionArn", "") or None
+                matches.append(sub)
         token = resp.get("NextToken")
         if not token:
             break
-    return None
+    return matches
 
 
 def _apply_filter_policy(arn, tag_list):
@@ -92,6 +107,16 @@ def _apply_filter_policy(arn, tag_list):
         AttributeName="FilterPolicy",
         AttributeValue=json.dumps({"tags": tag_list}),
     )
+
+
+def _sync_email_filter(email):
+    """将数据库中该邮箱的标签并集同步到所有已确认 SNS email subscriptions。"""
+    tags = _email_subscribed_tags(email)
+    for sub in _sns_subscriptions(email):
+        arn = sub.get("SubscriptionArn", "")
+        if arn.startswith("arn:aws:sns:"):
+            _apply_filter_policy(arn, tags)
+    return tags
 
 
 def lambda_handler(event, context):
@@ -118,26 +143,22 @@ def lambda_handler(event, context):
         )
 
     # 2. 保证 email 订阅存在
-    arn = _sns_subscription_arn(email)
+    subscriptions = _sns_subscriptions(email)
     created = False
-    if arn is None:
-        resp = _sns.subscribe(TopicArn=TOPIC_ARN, Protocol="email", Endpoint=email)
-        arn = resp.get("SubscriptionArn", "")
+    if not subscriptions:
+        _sns.subscribe(TopicArn=TOPIC_ARN, Protocol="email", Endpoint=email)
         created = True
 
-    # 3. 更新 FilterPolicy 为用户订阅的全部标签
-    #    仅当拿到真实完整 ARN（arn:aws:sns:...）才设置；SNS 对 email 首次 subscribe
-    #    返回的是 "PendingConfirmation"（非完整 ARN），此时 SetSubscriptionAttributes 会
-    #    报 "An ARN must have at least 6 elements" —— 待用户点确认邮件生效后再设置
+    # 3. 已确认时立即同步；首次仍 pending 时，notify-list 会在用户确认后自动补设。
     all_tags = _subscribed_tags(user_sub)
-    if arn and arn.startswith("arn:aws:sns:"):
-        _apply_filter_policy(arn, all_tags)
+    email_tags = _sync_email_filter(email)
 
     return _json(
         200,
         {
             "email": email,
             "tags": all_tags,
+            "email_tags": email_tags,
             "subscription_created": created,
             "message": (
                 "Subscription updated. If a confirmation email was sent, "

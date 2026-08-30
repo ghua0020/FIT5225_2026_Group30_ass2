@@ -153,7 +153,7 @@ def _gallery_item(raw_item: dict) -> dict:
         "file_id": str(item.get("file_id", "")),
         "checksum": str(item.get("checksum", "")),
         "file_type": str(item.get("file_type", "image")),
-        "file_name": PurePosixPath(full_key).name,
+        "file_name": str(item.get("file_name") or PurePosixPath(full_key).name),
         "tags": item.get("tags", []),
         "tag_counts": item.get("tag_counts", {}),
         "full_url": _presign(full_url),

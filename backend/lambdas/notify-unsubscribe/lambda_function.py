@@ -9,12 +9,13 @@ Pacific BioArchive — notify-unsubscribe Lambda（成员 C）
 环境变量（Lambda 中配置）：
   SUBSCRIPTIONS_TABLE    subscriptions（默认）
   NOTIFY_TOPIC_ARN       pba-tag-events 主题 ARN（必填）
-IAM 要求：dynamodb:DeleteItem/Query + sns:Unsubscribe/List/SetSubscriptionAttributes（Step 2.2）
+IAM 要求：dynamodb:DeleteItem/Query/Scan + sns:Unsubscribe/List/SetSubscriptionAttributes（Step 2.2）
 """
 import json
 import os
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 
 TABLE = os.environ.get("SUBSCRIPTIONS_TABLE", "subscriptions")
 TOPIC_ARN = os.environ.get("NOTIFY_TOPIC_ARN", "")
@@ -52,7 +53,7 @@ def _subscribed_tags(user_sub):
     while True:
         kwargs = {
             "KeyConditionExpression": (
-                boto3.dynamodb.conditions.Key("user_sub").eq(user_sub)
+                Key("user_sub").eq(user_sub)
             )
         }
         if last_key:
@@ -65,11 +66,23 @@ def _subscribed_tags(user_sub):
     return sorted({it["tag"] for it in items})
 
 
-def _sns_subscription_arn(email):
-    """返回该 topic 上 email 对应的订阅 ARN；无订阅返回 None。
-    SNS 对未确认的 email 订阅显示 "pending confirmation"（非完整 ARN）。
-    这里仍原样返回该字符串作为"已有订阅记录"标记；是否可用由调用方用
-    startswith("arn:aws:sns:") 判断。"""
+def _email_subscribed_tags(email):
+    items = []
+    last_key = None
+    while True:
+        kwargs = {"FilterExpression": Attr("email").eq(email)}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        resp = _table.scan(**kwargs)
+        items.extend(resp.get("Items", []))
+        last_key = resp.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return sorted({it["tag"] for it in items})
+
+
+def _sns_subscriptions(email):
+    matches = []
     token = None
     while True:
         kwargs = {"TopicArn": TOPIC_ARN}
@@ -78,11 +91,11 @@ def _sns_subscription_arn(email):
         resp = _sns.list_subscriptions_by_topic(**kwargs)
         for sub in resp.get("Subscriptions", []):
             if sub.get("Protocol") == "email" and sub.get("Endpoint") == email:
-                return sub.get("SubscriptionArn", "") or None
+                matches.append(sub)
         token = resp.get("NextToken")
         if not token:
             break
-    return None
+    return matches
 
 
 def _apply_filter_policy(arn, tag_list):
@@ -91,6 +104,20 @@ def _apply_filter_policy(arn, tag_list):
         AttributeName="FilterPolicy",
         AttributeValue=json.dumps({"tags": tag_list}),
     )
+
+
+def _sync_email_filter(email):
+    """按邮箱汇总标签；无标签则移除已确认订阅，否则同步 FilterPolicy。"""
+    tags = _email_subscribed_tags(email)
+    for sub in _sns_subscriptions(email):
+        arn = sub.get("SubscriptionArn", "")
+        if not arn.startswith("arn:aws:sns:"):
+            continue
+        if tags:
+            _apply_filter_policy(arn, tags)
+        else:
+            _sns.unsubscribe(SubscriptionArn=arn)
+    return tags
 
 
 def lambda_handler(event, context):
@@ -122,16 +149,6 @@ def lambda_handler(event, context):
     remaining = sorted(subscribed - set(removed))
 
     if TOPIC_ARN:
-        arn = _sns_subscription_arn(email)
-        # 仅对真实完整 ARN 操作；"pending confirmation"（未确认）跳过，
-        # 否则 SetSubscriptionAttributes / Unsubscribe 会因非法 ARN 报错
-        if arn and arn.startswith("arn:aws:sns:"):
-            if not remaining:
-                try:
-                    _sns.unsubscribe(SubscriptionArn=arn)
-                except Exception:
-                    pass
-            else:
-                _apply_filter_policy(arn, remaining)
+        _sync_email_filter(email)
 
     return _json(200, {"removed": sorted(removed), "remaining": remaining})

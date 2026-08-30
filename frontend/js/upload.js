@@ -86,6 +86,14 @@
       headers: data.uploadHeaders || { 'Content-Type': contentType },
       body: file
     });
+    // The checksum-derived object key is protected with If-None-Match: *.
+    // Another upload of the same bytes can win the race after this browser
+    // receives its URL; S3 reports that case as a duplicate, not an error.
+    if (putResp.status === 409 || putResp.status === 412) {
+      show('Duplicate detected (same checksum): "' + file.name + '" was skipped.', 'success');
+      addLine(file.name, 'duplicate');
+      return;
+    }
     if (!putResp.ok) {
       // S3 的错误是 XML 格式，解析出 <Code>/<Message> 便于定位（如 SignatureDoesNotMatch / AccessDenied）
       let detail = '';

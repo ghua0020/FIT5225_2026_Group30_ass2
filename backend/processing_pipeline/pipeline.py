@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import re
 import tempfile
 from typing import Any
+from urllib.parse import unquote
 from uuid import NAMESPACE_URL, uuid5
 
 from PIL import Image, UnidentifiedImageError
@@ -114,6 +115,11 @@ class ProcessingService:
         file_id = str(uuid5(NAMESPACE_URL, f"s3://{bucket}/{key}"))
         checksum = str(metadata.get("checksum", "")).lower()
         uploaded_by = str(metadata.get("uploaded-by", ""))
+        original_filename = unquote(str(metadata.get("original-filename", "")))
+        original_filename = original_filename.replace("\\", "/")
+        file_name = PurePosixPath(original_filename).name if original_filename else ""
+        if file_name in {"", ".", ".."}:
+            file_name = PurePosixPath(key).name
         if not re.fullmatch(r"[0-9a-f]{64}", checksum):
             raise ValueError("S3 object metadata checksum must be a complete SHA-256")
         if not uploaded_by:
@@ -121,7 +127,11 @@ class ProcessingService:
 
         with tempfile.TemporaryDirectory(prefix="pba-processing-") as temp_dir:
             temp = Path(temp_dir)
-            local_media = temp / PurePosixPath(key).name
+            # New checksum-addressed S3 keys intentionally have no extension.
+            # Preserve the original filename locally so video decoders and the
+            # Gallery still receive a useful name. Legacy objects fall back to
+            # their key basename above.
+            local_media = temp / file_name
             self.storage.download(bucket, key, local_media)
             bundle = self.model_provider.get_bundle(bucket)
 
@@ -151,6 +161,7 @@ class ProcessingService:
             record = {
                 "file_id": file_id,
                 "checksum": checksum,
+                "file_name": file_name,
                 "file_type": media_type,
                 "tags": sorted(tag_counts),
                 "tag_counts": tag_counts,

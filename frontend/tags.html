@@ -44,7 +44,7 @@
         <button type="button" id="btnAddMgmtUrl" class="secondary add-url-button">+ Add another URL</button>
         <p class="field-help">Add one database URL per field. Use Add another URL to edit multiple files.</p>
         <label for="mgmtTags">Species tags (comma separated)</label>
-        <input type="text" id="mgmtTags" list="speciesList" placeholder="Felis_catus, Dama_dama">
+        <input type="text" id="mgmtTags" placeholder="Felis_catus, Dama_dama">
         <fieldset class="management-options">
           <legend>Operation</legend>
           <label><input type="radio" name="op" value="1" checked> Add tags</label>
@@ -88,11 +88,6 @@
       </div>
     </section>
   </main>
-
-  <datalist id="speciesList">
-    <option value="Felis_catus"></option><option value="Dama_dama"></option>
-    <option value="Sus_scrofa"></option><option value="Wallabia_bicolor"></option>
-  </datalist>
 
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>

@@ -21,6 +21,7 @@ class FakeStorage:
             "Metadata": {
                 "checksum": "a" * 64,
                 "uploaded-by": "cognito-user-sub",
+                "original-filename": "camera%20cat.jpg",
             },
             "LastModified": datetime(2026, 8, 27, tzinfo=timezone.utc),
         }
@@ -77,13 +78,36 @@ def test_image_pipeline_writes_thumbnail_and_completed_record(tmp_path: Path) ->
         FakeModelProvider(),
         Settings(files_table="files", file_tags_table="file_tags"),
     )
-    result = service.process("media-bucket", "uploads/abc-cat.jpg")
+    checksum_key = "uploads/by-checksum/" + "a" * 64
+    result = service.process("media-bucket", checksum_key)
     assert result["tag_counts"] == {"Felis_catus": 1}
     assert result["tags"] == ["Felis_catus"]
-    assert result["thumb_url"].endswith("/thumbnails/abc-cat.jpg")
+    assert result["file_name"] == "camera cat.jpg"
+    assert result["thumb_url"].endswith("/thumbnails/by-checksum/" + "a" * 64 + ".jpg")
     assert storage.uploads[0][2] == "image/jpeg"
     assert len(repository.records) == 1
     assert isinstance(result["created_at"], int)
+
+
+def test_pipeline_falls_back_to_key_name_without_filename_metadata(tmp_path: Path) -> None:
+    source = tmp_path / "source.jpg"
+    Image.new("RGB", (32, 32), "blue").save(source)
+    storage = FakeStorage(source)
+    storage.head = lambda bucket, key: {
+        "ContentType": "image/jpeg",
+        "Metadata": {"checksum": "b" * 64, "uploaded-by": "user-sub"},
+        "LastModified": datetime(2026, 8, 27, tzinfo=timezone.utc),
+    }
+    service = ProcessingService(
+        storage,
+        FakeRepository(),
+        FakeModelProvider(),
+        Settings(files_table="files", file_tags_table="file_tags"),
+    )
+
+    result = service.process("media-bucket", "uploads/cat.jpg")
+
+    assert result["file_name"] == "cat.jpg"
 
 
 def test_processing_failure_is_recorded(tmp_path: Path) -> None:

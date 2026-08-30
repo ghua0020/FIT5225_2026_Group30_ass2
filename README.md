@@ -43,7 +43,7 @@ Processing implementation, local verification, AWS resources, environment variab
 
 ### Upload (S3 presigned URL)
 - SHA-256 checksum computed client-side
-- **Deduplication**: object keys carry a checksum prefix; `ListObjectsV2` prefix lookup rejects duplicate uploads instantly (database-layer dedup with DynamoDB auto-activates once Member B/C create the table)
+- **Deduplication**: the complete SHA-256 is queried through DynamoDB's `checksum-index` and used as the deterministic S3 object key; conditional `If-None-Match: *` uploads prevent concurrent overwrites
 - Presigned URL direct upload → no 10 MB API Gateway limit, large videos supported
 - Upload triggers S3 events automatically → Member B's processing pipeline (when deployed)
 
@@ -55,7 +55,7 @@ Processing implementation, local verification, AWS resources, environment variab
 ## Implemented Features (Member C — Query & Notification)
 
 - §4.3 six query APIs: tags with minimum counts (AND) · by species · thumbnail → full image · search-by-file (temporary detection, not stored) · bulk add/remove tags (`operation` 1/0) · delete files (storage + database)
-- §4.4 SNS notifications: subscribe / unsubscribe per species; email delivered by SNS FilterPolicy on message attribute `tags` (no SES)
+- §4.4 SNS notifications: subscribe / unsubscribe per species; email delivered by SNS FilterPolicy on message attribute `tags` (no SES); confirmed email subscriptions are reconciled from DynamoDB whenever the notification page loads
 - Pages: `query.html`, `tags.html`, `notify.html`; shared `js/api.js` client (Bearer token via A's `auth.js`)
 
 ---

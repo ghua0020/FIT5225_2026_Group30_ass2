@@ -67,6 +67,7 @@ def test_lists_files_with_presigned_urls_and_json_numbers(monkeypatch) -> None:
     item = {
         "file_id": "file-1",
         "checksum": "a" * 64,
+        "file_name": "Original Cat.JPG",
         "file_type": "image",
         "tags": ["Felis_catus"],
         "tag_counts": {"Felis_catus": Decimal("2")},
@@ -91,7 +92,7 @@ def test_lists_files_with_presigned_urls_and_json_numbers(monkeypatch) -> None:
             "file_id": "file-1",
             "checksum": "a" * 64,
             "file_type": "image",
-            "file_name": "cat.jpg",
+            "file_name": "Original Cat.JPG",
             "tags": ["Felis_catus"],
             "tag_counts": {"Felis_catus": 2},
             "created_at": 1787911023000,
