@@ -75,6 +75,35 @@ button.secondary { background: #eef1f4; color: #333; }
 button.secondary:hover { background: #dde3e9; }
 button:disabled { background: #a9b6c4; cursor: not-allowed; }
 
+.auth-divider {
+  align-items: center;
+  color: #758293;
+  display: flex;
+  font-size: 12px;
+  gap: 12px;
+  margin: 18px 0 0;
+}
+.auth-divider::before, .auth-divider::after {
+  background: #d9dee5;
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+.google-signin {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #aeb7c2;
+  color: #263442;
+  display: flex;
+  font-weight: 600;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+.google-signin:hover { background: #f7f9fb; color: #17212b; }
+.google-signin:disabled { background: #eef1f4; color: #687789; }
+.google-signin svg { flex: 0 0 18px; height: 18px; width: 18px; }
+
 /* 消息 */
 .msg { margin-top: 14px; padding: 10px 12px; border-radius: 6px; font-size: 13px; }
 .msg.error { background: #fdecec; color: #b02a2a; border: 1px solid #f5c6c6; }

@@ -23,8 +23,7 @@
   }
   $('btnLogout').addEventListener('click', function () {
     sessionStorage.removeItem(UPLOAD_STATE_KEY);
-    Auth.logout();
-    window.location.href = './index.html';
+    Auth.signOut();
   });
 
   function show(text, cls) {

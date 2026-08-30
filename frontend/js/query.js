@@ -89,8 +89,7 @@
   // 导航栏登出
   $('btnLogout').addEventListener('click', function () {
     sessionStorage.removeItem(SEARCH_STATE_KEY);
-    Auth.logout();
-    window.location.href = './index.html';
+    Auth.signOut();
   });
 
   /* ---------- 结果渲染 ---------- */

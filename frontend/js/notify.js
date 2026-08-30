@@ -19,8 +19,7 @@
   }
   $('btnLogout').addEventListener('click', function () {
     sessionStorage.removeItem(NOTIFY_STATE_KEY);
-    Auth.logout();
-    window.location.href = './index.html';
+    Auth.signOut();
   });
 
   function escapeHtml(s) {

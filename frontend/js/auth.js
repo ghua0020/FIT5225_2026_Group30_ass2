@@ -3,6 +3,7 @@
  *
  * 用法：
  *   - 登录/注册页：Auth.signUp / Auth.confirmSignUp / Auth.resendCode / Auth.login
+ *   - Google 登录：Auth.startGoogleLogin / Auth.handleOAuthCallback
  *   - 受保护页面：Auth.requireAuth()（未登录自动跳 signup.html）
  *   - 调后端 API：Auth.apiGet(path, params)（自动带 Bearer token，自动刷新过期 token）
  *   - 手写 header：Auth.authHeaders()
@@ -17,6 +18,9 @@
   const COGNITO_ENDPOINT = 'https://cognito-idp.' + CFG.region + '.amazonaws.com/';
   const TOKEN_KEY = 'pba_tokens';
   const USER_KEY = 'pba_username';
+  const OAUTH_STATE_KEY = 'pba_oauth_state';
+  const OAUTH_VERIFIER_KEY = 'pba_oauth_verifier';
+  const OAUTH_REDIRECT_KEY = 'pba_oauth_redirect_uri';
 
   /* ---------- 底层：调用 Cognito API ---------- */
   async function cognitoRequest(action, body) {
@@ -62,9 +66,34 @@
     return !!(s && s.idToken && s.expiresAt > Date.now());
   }
 
+  function clearOAuthTransaction() {
+    try {
+      sessionStorage.removeItem(OAUTH_STATE_KEY);
+      sessionStorage.removeItem(OAUTH_VERIFIER_KEY);
+      sessionStorage.removeItem(OAUTH_REDIRECT_KEY);
+    } catch (e) {
+      // Local sign-out must still succeed when browser storage is unavailable.
+    }
+  }
+
   function logout() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    clearOAuthTransaction();
+  }
+
+  /** Clear the local session and the Cognito managed-login cookie. */
+  function signOut() {
+    logout();
+    try {
+      const logoutUri = new URL('./login.html', global.location.href).href;
+      const url = new URL('/logout', oauthBaseUrl());
+      url.searchParams.set('client_id', CFG.cognitoClientId);
+      url.searchParams.set('logout_uri', logoutUri);
+      global.location.assign(url.toString());
+    } catch (e) {
+      global.location.href = './login.html';
+    }
   }
 
   /* ---------- 认证流程 ---------- */
@@ -112,6 +141,142 @@
     }
     saveSession(data.AuthenticationResult, username);
     return data.AuthenticationResult;
+  }
+
+  function oauthBaseUrl() {
+    const domain = String(CFG.cognitoDomain || '')
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/\/+$/, '');
+    if (!domain || domain.indexOf('YOUR_') === 0) {
+      throw new Error('Cognito domain is not configured.');
+    }
+    return 'https://' + domain;
+  }
+
+  function base64Url(bytes) {
+    let binary = '';
+    bytes.forEach(function (byte) { binary += String.fromCharCode(byte); });
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function randomBase64Url(byteLength) {
+    const bytes = new Uint8Array(byteLength);
+    global.crypto.getRandomValues(bytes);
+    return base64Url(bytes);
+  }
+
+  async function pkceChallenge(verifier) {
+    const digest = await global.crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(verifier)
+    );
+    return base64Url(new Uint8Array(digest));
+  }
+
+  /** Start Google federation through Cognito using authorization code + PKCE. */
+  async function startGoogleLogin() {
+    if (!global.crypto || !global.crypto.subtle) {
+      throw new Error('Google sign-in requires HTTPS or localhost.');
+    }
+
+    const state = randomBase64Url(32);
+    const verifier = randomBase64Url(64);
+    const challenge = await pkceChallenge(verifier);
+    const redirectUri = new URL('./auth-callback.html', global.location.href).href;
+
+    try {
+      sessionStorage.setItem(OAUTH_STATE_KEY, state);
+      sessionStorage.setItem(OAUTH_VERIFIER_KEY, verifier);
+      sessionStorage.setItem(OAUTH_REDIRECT_KEY, redirectUri);
+    } catch (e) {
+      throw new Error('Browser session storage is required for Google sign-in.');
+    }
+
+    const url = new URL('/oauth2/authorize', oauthBaseUrl());
+    url.searchParams.set('identity_provider', 'Google');
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', CFG.cognitoClientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('scope', 'openid email profile');
+    url.searchParams.set('state', state);
+    url.searchParams.set('code_challenge', challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    global.location.assign(url.toString());
+  }
+
+  /** Validate the OAuth callback and exchange its code for Cognito tokens. */
+  async function handleOAuthCallback() {
+    const params = new URLSearchParams(global.location.search);
+    const oauthError = params.get('error');
+    if (oauthError) {
+      const description = params.get('error_description');
+      clearOAuthTransaction();
+      throw new Error(description || ('Google sign-in failed: ' + oauthError));
+    }
+
+    const code = params.get('code');
+    const returnedState = params.get('state');
+    let expectedState;
+    let verifier;
+    let redirectUri;
+    try {
+      expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+      verifier = sessionStorage.getItem(OAUTH_VERIFIER_KEY);
+      redirectUri = sessionStorage.getItem(OAUTH_REDIRECT_KEY);
+    } catch (e) {
+      throw new Error('Browser session storage is unavailable. Start Google sign-in again.');
+    }
+
+    if (!code) throw new Error('Missing authorization code. Start Google sign-in again.');
+    if (!returnedState || !expectedState || returnedState !== expectedState) {
+      clearOAuthTransaction();
+      throw new Error('Google sign-in state validation failed. Start again.');
+    }
+    if (!verifier || !redirectUri) {
+      clearOAuthTransaction();
+      throw new Error('Google sign-in session expired. Start again.');
+    }
+    const currentCallback = new URL(global.location.href);
+    currentCallback.search = '';
+    currentCallback.hash = '';
+    if (redirectUri !== currentCallback.href) {
+      clearOAuthTransaction();
+      throw new Error('Google sign-in redirect validation failed. Start again.');
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CFG.cognitoClientId,
+      code: code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier
+    });
+    const response = await fetch(oauthBaseUrl() + '/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    let data = null;
+    try { data = await response.json(); } catch (e) { data = null; }
+    if (!response.ok) {
+      const detail = data && (data.error_description || data.error);
+      throw new Error(detail || ('Token exchange failed: HTTP ' + response.status));
+    }
+    if (!data || !data.id_token || !data.access_token) {
+      throw new Error('Cognito returned an incomplete Google session.');
+    }
+
+    const identity = parseJwtPayload(data.id_token);
+    saveSession({
+      IdToken: data.id_token,
+      AccessToken: data.access_token,
+      RefreshToken: data.refresh_token,
+      ExpiresIn: data.expires_in
+    }, identity.email || identity['cognito:username'] || 'Google user');
+    clearOAuthTransaction();
+    return data;
   }
 
   /** 用 refresh token 刷新会话（token 过期时自动调用）。 */
@@ -202,7 +367,8 @@
 
   /* ---------- 导出 ---------- */
   global.Auth = {
-    signUp, confirmSignUp, resendCode, login, logout, refreshSession,
+    signUp, confirmSignUp, resendCode, login, startGoogleLogin, handleOAuthCallback,
+    logout, signOut, refreshSession,
     isAuthenticated, requireAuth, redirectIfAuthenticated,
     getSession, getCurrentUser, authHeaders, apiGet
   };

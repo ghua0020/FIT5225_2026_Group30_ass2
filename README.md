@@ -123,7 +123,7 @@ docs/
 
 ### 2. Configure
 Fill real values into `frontend/js/config.js`:
-- `region`, `cognitoClientId`, `cognitoUserPoolId`, `apiBaseUrl`, `bucketName`
+- `region`, `cognitoClientId`, `cognitoUserPoolId`, `cognitoDomain`, `apiBaseUrl`, `bucketName`
 - The browser must use a Cognito Public App Client. Never place a client secret in frontend code.
 
 ### 3. Run locally

@@ -10,6 +10,7 @@ window.APP_CONFIG = {
   /* ---- Cognito ---- */
   cognitoClientId: 'YOUR_COGNITO_CLIENT_ID',
   cognitoUserPoolId: 'YOUR_COGNITO_USER_POOL_ID',
+  cognitoDomain: 'YOUR_COGNITO_DOMAIN', // 例如 my-domain.auth.us-east-1.amazoncognito.com
 
   /* ---- API Gateway ---- */
   apiBaseUrl: 'YOUR_UPLOAD_API_BASE_URL/',    // 成员 A 的上传 API（末尾带 /）

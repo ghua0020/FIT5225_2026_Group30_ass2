@@ -11,6 +11,7 @@ window.APP_CONFIG = {
   // Browser applications must use a Public App Client without a client secret.
   cognitoClientId: '2kn1kguo5sdppudknrp9udu7tu',
   cognitoUserPoolId: 'us-east-1_rThAMvbnC',          // 仅 B/C 配置 API Gateway Authorizer 时使用
+  cognitoDomain: 'us-east-1rthamvbnc.auth.us-east-1.amazoncognito.com',
 
   /* ---- API Gateway（Step 5）---- */
   apiBaseUrl: 'https://5asagf7xx0.execute-api.us-east-1.amazonaws.com/prod/',  // 末尾必须带 /

@@ -29,10 +29,12 @@
 
       <!-- Step 2: 邮箱验证码确认 -->
       <form id="confirmForm" class="hidden">
+        <p id="confirmEmail" class="subtitle"></p>
         <label for="code">Verification code (sent to your email)</label>
-        <input type="text" id="code" required>
+        <input type="text" id="code" required autocomplete="one-time-code" inputmode="numeric">
         <button type="submit">Verify and continue</button>
         <button type="button" id="btnResend" class="secondary">Resend code</button>
+        <button type="button" id="btnChangeEmail" class="secondary">Use a different email</button>
       </form>
 
       <div id="msg"></div>
@@ -47,10 +49,39 @@
       Auth.redirectIfAuthenticated();
       const $ = id => document.getElementById(id);
       const msg = $('msg');
+      let pendingEmail = (localStorage.getItem('pba_pending_email') || '').trim();
 
       function show(text, cls) {
         msg.className = 'msg ' + (cls || 'info');
         msg.textContent = text;
+      }
+
+      function showConfirmation(email, message) {
+        pendingEmail = email;
+        localStorage.setItem('pba_pending_email', email);
+        $('signupForm').classList.add('hidden');
+        $('confirmForm').classList.remove('hidden');
+        $('confirmEmail').textContent = 'Code sent to ' + email;
+        $('code').focus();
+        if (message) show(message, 'success');
+      }
+
+      function showRegistration() {
+        pendingEmail = '';
+        localStorage.removeItem('pba_pending_email');
+        $('confirmForm').classList.add('hidden');
+        $('signupForm').classList.remove('hidden');
+        $('email').value = '';
+        $('code').value = '';
+        msg.className = '';
+        msg.textContent = '';
+        $('email').focus();
+      }
+
+      // Recover an interrupted verification flow, including users sent here
+      // after Cognito reports UserNotConfirmedException on the login page.
+      if (pendingEmail) {
+        showConfirmation(pendingEmail, 'Enter the verification code previously sent to your email.');
       }
 
       $('signupForm').addEventListener('submit', async function (e) {
@@ -64,11 +95,7 @@
         btn.disabled = true;
         try {
           await Auth.signUp(email, firstName, lastName, password);
-          // 记录邮箱供确认/重发使用
-          localStorage.setItem('pba_pending_email', email);
-          $('signupForm').classList.add('hidden');
-          $('confirmForm').classList.remove('hidden');
-          show('Verification email sent to ' + email + '. Enter the code below.', 'success');
+          showConfirmation(email, 'Verification email sent. Enter the code below.');
         } catch (err) {
           show(err.message, 'error');
         } finally {
@@ -78,11 +105,12 @@
 
       $('confirmForm').addEventListener('submit', async function (e) {
         e.preventDefault();
-        const email = localStorage.getItem('pba_pending_email') || '';
+        const email = pendingEmail;
         const btn = e.target.querySelector('button[type=submit]');
         btn.disabled = true;
         try {
           await Auth.confirmSignUp(email, $('code').value.trim());
+          pendingEmail = '';
           localStorage.removeItem('pba_pending_email');
           show('Account verified! Redirecting to sign in...', 'success');
           setTimeout(() => window.location.href = './login.html', 1500);
@@ -94,13 +122,17 @@
       });
 
       $('btnResend').addEventListener('click', async function () {
-        const email = localStorage.getItem('pba_pending_email') || '';
+        const email = pendingEmail;
         try {
           await Auth.resendCode(email);
           show('Code resent to ' + email, 'success');
         } catch (err) {
           show(err.message, 'error');
         }
+      });
+
+      $('btnChangeEmail').addEventListener('click', function () {
+        showRegistration();
       });
     })();
   </script>

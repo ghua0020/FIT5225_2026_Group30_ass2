@@ -42,8 +42,7 @@
 
   $('btnLogout').addEventListener('click', function () {
     sessionStorage.removeItem(GALLERY_STATE_KEY);
-    Auth.logout();
-    window.location.href = './index.html';
+    Auth.signOut();
   });
   refreshButton.addEventListener('click', loadGallery);
   $('gallerySearch').addEventListener('input', function () {

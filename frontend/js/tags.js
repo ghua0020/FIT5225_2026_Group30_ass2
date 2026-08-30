@@ -18,8 +18,7 @@
   }
   $('btnLogout').addEventListener('click', function () {
     sessionStorage.removeItem(TAGS_STATE_KEY);
-    Auth.logout();
-    window.location.href = './index.html';
+    Auth.signOut();
   });
 
   function bulkUrlValues(includeEmpty) {
