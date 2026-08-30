@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Completing Sign In — Pacific BioArchive</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Completing sign in</h1>
+      <p class="subtitle">Securely connecting your Google account to Pacific BioArchive.</p>
+      <div id="callbackStatus" class="msg info" role="status" aria-live="polite">
+        Verifying your Google sign-in…
+      </div>
+      <p id="callbackAction" class="link-line hidden">
+        <a href="login.html">Return to sign in</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async function () {
+      const status = document.getElementById('callbackStatus');
+      const action = document.getElementById('callbackAction');
+      try {
+        await Auth.handleOAuthCallback();
+        status.className = 'msg success';
+        status.textContent = 'Google sign-in complete. Opening your gallery...';
+        window.location.replace('./gallery.html');
+      } catch (err) {
+        status.className = 'msg error';
+        status.textContent = err.message;
+        action.classList.remove('hidden');
+      }
+    })();
+  </script>
+</body>
+</html>
